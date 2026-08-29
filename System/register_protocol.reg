@@ -1,0 +1,23 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\bluestacks]
+@="URL:BlueStacks Custom Protocol"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\bluestacks\shell]
+
+[HKEY_CURRENT_USER\Software\Classes\bluestacks\shell\open]
+
+[HKEY_CURRENT_USER\Software\Classes\bluestacks\shell\open\command]
+@="\"C:\\Program Files\\BlueStacks_nxt\\HD-Player.exe\" --instance Nougat32 --package com.mobile.legends"
+
+[HKEY_CURRENT_USER\Software\Classes\mlbb]
+@="URL:MLBB Backend Server Protocol"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\mlbb\shell]
+
+[HKEY_CURRENT_USER\Software\Classes\mlbb\shell\open]
+
+[HKEY_CURRENT_USER\Software\Classes\mlbb\shell\open\command]
+@="\"C:\\Users\\mdati\\AppData\\Local\\Python\\pythoncore-3.14-64\\pythonw.exe\" \"c:\\Users\\mdati\\Desktop\\Extension For brave\\Backend\\server.py\""

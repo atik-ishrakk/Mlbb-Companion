@@ -1,0 +1,148 @@
+/* ==========================================================================
+   MLBB COMPANION — UPDATES & PATCH NOTES STYLESHEET (updates.css)
+   ========================================================================== */
+
+.patch-workspace-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+  flex: 1;
+  height: calc(100vh - 72px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .patch-workspace-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.patch-search-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+/* Version List Pane */
+.version-list-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.version-item-card {
+  background: rgba(10, 16, 36, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.version-item-card:hover {
+  background: rgba(16, 24, 52, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.version-item-card.active {
+  background: rgba(6, 182, 212, 0.12);
+  border-color: var(--cyan-accent);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
+}
+
+.version-tag {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-light);
+}
+
+.version-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Version Details Pane */
+.version-details-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.patch-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--gold-primary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.patch-change-card {
+  background: rgba(14, 21, 46, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.change-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.change-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-light);
+}
+
+.diff-badge {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.diff-badge.buff {
+  background: rgba(16, 185, 129, 0.2);
+  color: var(--green-success);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.diff-badge.nerf {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--red-enemy);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.diff-badge.adjust {
+  background: rgba(14, 165, 233, 0.2);
+  color: var(--blue-ally);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+}
+
+.change-desc {
+  font-size: 12px;
+  color: var(--text-gray);
+  line-height: 1.5;
+}

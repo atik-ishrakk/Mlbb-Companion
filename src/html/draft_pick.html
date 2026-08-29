@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLBB Companion — 5v5 Live Draft Pick & Strategy Hub</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/navbar.css">
+  <link rel="stylesheet" href="../css/modal.css">
+  <link rel="stylesheet" href="../css/draft_pick.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Global Header -->
+    <header class="app-header-nav">
+      <div class="brand-wrapper">
+        <img src="../assets/img/logo.png" alt="Logo" class="brand-logo">
+        <div>
+          <h1 class="brand-title">MLBB COMPANION</h1>
+          <p class="brand-subtitle">5v5 Live Draft Pick & Real-Time Strategy Engine</p>
+        </div>
+      </div>
+      
+      <nav class="nav-links-group">
+        <a href="draft_pick.html" class="nav-link-item active">Draft Pick</a>
+        <a href="checker.html" class="nav-link-item">Manual Checker</a>
+        <a href="updates.html" class="nav-link-item">Updates</a>
+      </nav>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="draft-workspace-grid">
+      
+      <!-- LEFT COLUMN: 5v5 DRAFT BOARD -->
+      <section class="card-panel draft-board-container">
+        
+        <!-- Clean Control Panel Bar -->
+        <div class="control-panel-bar">
+          <div class="ban-lobby-group">
+            <span class="ban-lobby-label">BAN FORMAT</span>
+            <div class="rank-selector-group" id="rankSelector">
+              <button class="rank-btn" data-bans="3">3 BANS</button>
+              <button class="rank-btn" data-bans="4">4 BANS</button>
+              <button class="rank-btn active" data-bans="5">5 BANS</button>
+            </div>
+          </div>
+          <button id="resetDraftBtn" class="btn btn--secondary btn--compact esports-btn-reset" title="Reset all draft slots">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            RESET
+          </button>
+        </div>
+
+        <!-- 5v5 Board: Blue vs Red with Central Lane Anchors -->
+        <div class="teams-wrapper">
+          
+          <!-- ALLY (BLUE) SIDE -->
+          <div class="team-column-card">
+            <div class="team-header-bar team-header--ally">
+              <span class="team-header-badge"><span class="glow-dot glow-dot--ally"></span> BLUE ALLY</span>
+            </div>
+
+            <!-- Ally Bans -->
+            <div class="bans-row-container" id="allyBansContainer">
+              <!-- Populated dynamically via draft_pick.js -->
+            </div>
+
+            <!-- Ally Picks -->
+            <div class="slots-list-container" id="allySlotsContainer">
+              <!-- Populated dynamically via draft_pick.js -->
+            </div>
+          </div>
+
+          <!-- CENTRAL LANE MATCHUP DIVIDER COLUMN -->
+          <div class="lanes-divider-column">
+            <div class="lanes-divider-header">
+              <span>VS</span>
+            </div>
+            <div class="bans-divider-spacer"></div>
+            <div class="lanes-axis-list" id="lanesAxisList">
+              <div class="lane-axis-node lane--exp" data-lane="exp" title="EXP Lane Matchup">
+                <span class="lane-axis-indicator"></span>
+                <span class="lane-axis-text">EXP</span>
+              </div>
+              <div class="lane-axis-node lane--jungle" data-lane="jungle" title="Jungle Matchup">
+                <span class="lane-axis-indicator"></span>
+                <span class="lane-axis-text">JNG</span>
+              </div>
+              <div class="lane-axis-node lane--mid" data-lane="mid" title="Mid Lane Matchup">
+                <span class="lane-axis-indicator"></span>
+                <span class="lane-axis-text">MID</span>
+              </div>
+              <div class="lane-axis-node lane--gold" data-lane="gold" title="Gold Lane Matchup">
+                <span class="lane-axis-indicator"></span>
+                <span class="lane-axis-text">GLD</span>
+              </div>
+              <div class="lane-axis-node lane--roam" data-lane="roam" title="Roam Matchup">
+                <span class="lane-axis-indicator"></span>
+                <span class="lane-axis-text">ROM</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- ENEMY (RED) SIDE -->
+          <div class="team-column-card">
+            <div class="team-header-bar team-header--enemy">
+              <span class="team-header-badge"><span class="glow-dot glow-dot--enemy"></span> RED ENEMY</span>
+            </div>
+
+            <!-- Enemy Bans -->
+            <div class="bans-row-container" id="enemyBansContainer">
+              <!-- Populated dynamically via draft_pick.js -->
+            </div>
+
+            <!-- Enemy Picks -->
+            <div class="slots-list-container" id="enemySlotsContainer">
+              <!-- Populated dynamically via draft_pick.js -->
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- RIGHT COLUMN: DYNAMIC STRATEGY HUB -->
+      <aside class="card-panel strategy-hub-scroll">
+        <div class="panel-header">
+          <h2 class="panel-title"><span class="hud-prefix">//</span> STRATEGY ENGINE</h2>
+          <span class="status-indicator active" id="engineStatus">LIVE SYNC ACTIVE</span>
+        </div>
+
+        <!-- 1. Win Probability & Synergy Meter -->
+        <div class="strategy-card win-prob-card">
+          <div class="win-prob-header-row">
+            <div class="faction-score-tag ally-score-tag">
+              <span class="faction-dot ally-dot"></span>
+              <span>BLUE ALLY</span>
+              <strong id="ally-win-prob-text" class="score-number">50%</strong>
+            </div>
+            <div class="faction-score-tag enemy-score-tag">
+              <strong id="enemy-win-prob-text" class="score-number">50%</strong>
+              <span>RED ENEMY</span>
+              <span class="faction-dot enemy-dot"></span>
+            </div>
+          </div>
+
+          <div class="win-bar-track">
+            <div class="win-bar-fill" id="win-prob-bar-fill"></div>
+          </div>
+
+          <!-- Team Metrics Summary Pills -->
+          <div class="team-metrics-row" id="teamMetricsRow">
+            <div class="metric-pill" id="durabilityPill" title="Team Frontline & Tankiness">
+              <span class="metric-label">DEFENSE:</span>
+              <span class="metric-val" id="durabilityVal">50</span>
+            </div>
+            <div class="metric-pill" id="ccPill" title="Crowd Control & Set Plays">
+              <span class="metric-label">CC CONTROL:</span>
+              <span class="metric-val" id="ccVal">50</span>
+            </div>
+            <div class="metric-pill" id="dmgSplitPill" title="Damage Type Distribution">
+              <span class="metric-label">DMG BIAS:</span>
+              <span class="metric-val" id="dmgSplitVal">50/50</span>
+            </div>
+          </div>
+
+          <div id="win-prob-explanation" class="win-explanation-text">
+            Draft is balanced. BlueStacks CV auto-synchronizes locked picks and bans in real time.
+          </div>
+        </div>
+
+        <!-- 2. Threat Analysis -->
+        <div class="strategy-card threat-card">
+          <div class="strategy-card-header text-amber">
+            <span><span class="hud-prefix">//</span> THREAT COMPOSITION MATRIX</span>
+          </div>
+          <div id="enemy-threat-list" class="threat-list-body">
+            <span class="text-placeholder">Waiting for enemy picks...</span>
+          </div>
+        </div>
+
+        <!-- 3. Smart Counter-Pick Recommendations -->
+        <div class="strategy-card rec-card">
+          <div class="strategy-card-header text-cyan">
+            <span><span class="hud-prefix">//</span> TACTICAL COUNTER-PICKS</span>
+          </div>
+          <div id="recommended-heroes-grid" class="rec-grid-body">
+            <!-- Populated via recommender.js -->
+          </div>
+        </div>
+
+        <!-- 4. Optimal Item Counter Builds -->
+        <div class="strategy-card items-card">
+          <div class="strategy-card-header text-gold">
+            <span><span class="hud-prefix">//</span> RECOMMENDED EQUIPMENT</span>
+          </div>
+          <div id="recommended-items-grid" class="items-grid-body">
+            <!-- Populated via recommender.js -->
+          </div>
+        </div>
+
+      </aside>
+
+    </main>
+
+  </div>
+
+  <!-- Hero Selection Modal Overlay -->
+  <div class="modal-overlay hidden" id="heroSelectModal" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalHeroTitle" class="modal-title-text text-cyan"><span class="hud-prefix">//</span> SELECT HERO</h3>
+        <div class="modal-header-actions">
+          <span class="esc-hint-tag">ESC TO CLOSE</span>
+          <button id="btnCloseHeroModal" class="modal-close-btn" title="Close (Esc)">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-toolbar-row">
+          <div class="modal-filter-bar" id="roleFilterBar">
+            <button class="filter-btn active" data-role="All">ALL</button>
+            <button class="filter-btn" data-role="Tank">TANK</button>
+            <button class="filter-btn" data-role="Fighter">FIGHTER</button>
+            <button class="filter-btn" data-role="Assassin">ASSASSIN</button>
+            <button class="filter-btn" data-role="Mage">MAGE</button>
+            <button class="filter-btn" data-role="Marksman">MARKSMAN</button>
+            <button class="filter-btn" data-role="Support">SUPPORT</button>
+          </div>
+
+          <div class="modal-search-wrapper">
+            <input type="text" id="heroSearchInput" class="modal-search-input" placeholder="Search hero by name..." autocomplete="off">
+          </div>
+        </div>
+
+        <div class="modal-heroes-grid" id="modalHeroGrid">
+          <!-- Populated dynamically via draft_pick.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Equipment Selection Modal Overlay -->
+  <div class="modal-overlay hidden" id="itemSelectModal" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalItemTitle" class="modal-title-text text-gold"><span class="hud-prefix">//</span> SELECT EQUIPMENT</h3>
+        <div class="modal-header-actions">
+          <span class="esc-hint-tag">ESC TO CLOSE</span>
+          <button id="btnCloseItemModal" class="modal-close-btn" title="Close (Esc)">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-toolbar-row">
+          <div class="modal-filter-bar" id="itemCategoryFilterBar">
+            <button class="filter-btn active" data-category="All">ALL</button>
+            <button class="filter-btn" data-category="Attack">PHYSICAL</button>
+            <button class="filter-btn" data-category="Magic">MAGIC</button>
+            <button class="filter-btn" data-category="Defense">DEFENSE</button>
+            <button class="filter-btn" data-category="Movement">MOVEMENT</button>
+            <button class="filter-btn" data-category="Roam">ROAM</button>
+          </div>
+
+          <div class="modal-search-wrapper">
+            <input type="text" id="itemSearchInput" class="modal-search-input" placeholder="Search item by name or stats..." autocomplete="off">
+          </div>
+        </div>
+
+        <div class="modal-items-grid" id="modalItemGrid">
+          <!-- Populated dynamically via draft_pick.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts in Proper Dependency Order -->
+  <script src="../js/heroes-items.js"></script>
+  <script src="../js/recommender.js"></script>
+  <script src="../js/draft_pick-state.js"></script>
+  <script src="../js/draft_pick-modal.js"></script>
+  <script src="../js/draft_pick-ui.js"></script>
+  <script src="../js/draft_pick-daemon.js"></script>
+  <script src="../js/draft_pick.js"></script>
+</body>
+</html>

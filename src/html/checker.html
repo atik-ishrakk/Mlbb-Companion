@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLBB Companion — Manual Checker & Precision CV Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/navbar.css">
+  <link rel="stylesheet" href="../css/checker.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Global Header -->
+    <header class="app-header-nav">
+      <div class="brand-wrapper">
+        <img src="../assets/img/logo.png" alt="Logo" class="brand-logo">
+        <div>
+          <h1 class="brand-title">MLBB COMPANION</h1>
+          <p class="brand-subtitle">Manual Checker & Precision CV Lab</p>
+        </div>
+      </div>
+      
+      <nav class="nav-links-group">
+        <a href="draft_pick.html" class="nav-link-item">Draft Pick</a>
+        <a href="checker.html" class="nav-link-item active">Manual Checker</a>
+        <a href="updates.html" class="nav-link-item">Updates</a>
+      </nav>
+    </header>
+
+    <!-- Main Checker Layout with Draggable Panel Splitter -->
+    <main class="checker-grid-layout" id="checkerGridLayout">
+      
+      <!-- LEFT COLUMN: IMAGE UPLOAD & CANVAS -->
+      <section class="card-panel left-panel" id="leftPanel">
+        
+        <div class="dropzone-box" id="dropzoneBox">
+          <div class="dropzone-header">
+            <div>
+              <span style="font-size: 13px; font-weight: 800; color: var(--cyan-accent); letter-spacing: 0.5px;">📷 MANUAL CHECKER</span>
+              <p style="font-size: 11px; color: var(--text-muted); margin-top: 1px;">Drop any 1920×1080 MLBB screenshot or capture directly from BlueStacks</p>
+            </div>
+            
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button type="button" id="btnCaptureLive" class="btn btn--secondary btn--compact">📸 Live Scan</button>
+              <label for="imageFileInput" class="btn btn--cyan btn--compact" style="cursor: pointer; margin-bottom: 0;">
+                <span>📁 Upload Image</span>
+              </label>
+              <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+              
+              <!-- Settings Button with Dropdown Trigger -->
+              <button type="button" id="btnOpenSettings" class="btn btn--secondary btn--compact settings-trigger-btn" title="Toggle Calibration & Slot Dimension Settings">
+                <span class="gear-icon">⚙️</span>
+                <span>Settings</span>
+                <span class="chevron-icon">▼</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ⚙️ SETTINGS DROPDOWN ACCORDION PANEL (Animated Dropdown) -->
+          <div id="settingsDropdownPanel" class="settings-dropdown-panel">
+            <div class="settings-dropdown-inner">
+              <div class="settings-dropdown-header">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span style="font-size: 13px; color: var(--cyan-accent); font-weight: 900;">CALIBRATION & SLOT DIMENSIONS</span>
+                </div>
+                <span style="font-size: 10px; color: var(--text-muted);">Adjust pixel coordinates live & save to engine</span>
+              </div>
+
+              <!-- Category Tabs -->
+              <div class="dim-subtabs">
+                <button type="button" class="dim-tab active" data-tab="bans">🚫 Ban Slots (1–10)</button>
+                <button type="button" class="dim-tab" data-tab="picks">👥 Pick Slots (1–10)</button>
+                <button type="button" class="dim-tab" data-tab="subelements">🎯 Sub-Elements (Flag/Lane/Spell)</button>
+              </div>
+
+              <!-- TAB 1: BANS -->
+              <div class="dim-tab-pane active" id="paneBans">
+                <div class="dim-input-grid">
+                  <div class="dim-input-group">
+                    <label>Ally Ban Start X</label>
+                    <input type="number" id="dimAllyBanX" value="30" min="0" max="1920">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Ally Ban Step</label>
+                    <input type="number" id="dimAllyBanStep" value="110" min="50" max="200">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Enemy Ban Start X</label>
+                    <input type="number" id="dimEnemyBanX" value="1370" min="0" max="1920">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Enemy Ban Step</label>
+                    <input type="number" id="dimEnemyBanStep" value="110" min="50" max="200">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Ban Y Offset</label>
+                    <input type="number" id="dimBanY" value="6" min="0" max="500">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Ban Size (W×H)</label>
+                    <input type="number" id="dimBanSize" value="80" min="40" max="150">
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 2: PICKS -->
+              <div class="dim-tab-pane" id="panePicks">
+                <div class="dim-input-grid">
+                  <div class="dim-input-group">
+                    <label>Ally Pick X</label>
+                    <input type="number" id="dimAllyPickX" value="0" min="0" max="1920">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Enemy Pick X</label>
+                    <input type="number" id="dimEnemyPickX" value="1710" min="0" max="1920">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick Width</label>
+                    <input type="number" id="dimPickW" value="210" min="100" max="400">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick Height</label>
+                    <input type="number" id="dimPickH" value="132" min="80" max="200">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick 1 Y</label>
+                    <input type="number" id="dimPickY0" value="125" min="0" max="1080">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick 2 Y</label>
+                    <input type="number" id="dimPickY1" value="298" min="0" max="1080">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick 3 Y</label>
+                    <input type="number" id="dimPickY2" value="470" min="0" max="1080">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick 4 Y</label>
+                    <input type="number" id="dimPickY3" value="642" min="0" max="1080">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Pick 5 Y</label>
+                    <input type="number" id="dimPickY4" value="814" min="0" max="1080">
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 3: SUB-ELEMENTS -->
+              <div class="dim-tab-pane" id="paneSubElements">
+                <div class="dim-input-grid">
+                  <div class="dim-input-group">
+                    <label>Flag Rel X / Y</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="number" id="dimFlagX" value="6" min="-500" max="1920">
+                      <input type="number" id="dimFlagY" value="3" min="-500" max="1080">
+                    </div>
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Flag Size</label>
+                    <input type="number" id="dimFlagSize" value="46" min="15" max="150">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Lane Rel X / Y</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="number" id="dimLaneX" value="5" min="-500" max="1920">
+                      <input type="number" id="dimLaneY" value="53" min="-500" max="1080">
+                    </div>
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Lane Size</label>
+                    <input type="number" id="dimLaneSize" value="50" min="15" max="150">
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Spell Rel X / Y</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="number" id="dimSpellX" value="194" min="-500" max="1920">
+                      <input type="number" id="dimSpellY" value="2" min="-500" max="1080">
+                    </div>
+                  </div>
+                  <div class="dim-input-group">
+                    <label>Spell Size (W×H)</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="number" id="dimSpellW" value="54" min="20" max="80">
+                      <input type="number" id="dimSpellH" value="55" min="20" max="80">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action Toolbar -->
+              <div class="dim-actions-bar">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <button type="button" id="btnSaveDimensions" class="btn btn--cyan btn--compact">💾 Save to Engine</button>
+                  <button type="button" id="btnExportJson" class="btn btn--secondary btn--compact">⬇️ Export JSON</button>
+                  <button type="button" id="btnResetDimensions" class="btn btn--secondary btn--compact" style="color: #f87171;">🔄 Reset</button>
+                </div>
+                <span id="dimStatusMsg" class="dim-status-msg"></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Canvas Container -->
+          <div class="canvas-container" id="canvasContainer">
+            <canvas id="previewCanvas"></canvas>
+            <!-- Floating Interactive Slot Edit Banner -->
+            <div id="slotEditBanner" class="slot-edit-banner" style="display: none;">
+              <span id="slotEditBannerText">✏️ Editing Slot: Drag to move, handles to resize</span>
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <button type="button" id="btnDoneEditingSlot" class="btn btn--cyan btn--compact" style="padding: 2px 10px; font-size: 10px; font-weight: 800;">✓ Done</button>
+                <button type="button" id="btnCancelEditingSlot" class="btn btn--secondary btn--compact" style="padding: 2px 8px; font-size: 10px;">✕</button>
+              </div>
+            </div>
+
+            <!-- Custom Right-Click Slot Context Menu -->
+            <div id="slotContextMenu" class="slot-context-menu" style="display: none;">
+              <div class="context-menu-section-label">GROUP</div>
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle All Slots Group Moving">
+                <input type="checkbox" id="ctxChkAllGroup" checked class="ctx-checkbox">
+                <span class="ctx-label-text">Group</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Ungroup All (Move 100% independently)">
+                <input type="checkbox" id="ctxChkUngroup" class="ctx-checkbox">
+                <span class="ctx-label-text">Ungroup</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle Ally Picks Group Moving">
+                <input type="checkbox" id="ctxChkAlly" checked class="ctx-checkbox">
+                <span class="ctx-label-text">Ally</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle Enemy Picks Group Moving">
+                <input type="checkbox" id="ctxChkEnemy" checked class="ctx-checkbox">
+                <span class="ctx-label-text">Enemy</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle Ban Slots Group Moving">
+                <input type="checkbox" id="ctxChkBans" checked class="ctx-checkbox">
+                <span class="ctx-label-text">Bans</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle Flags Group Moving with Picks">
+                <input type="checkbox" id="ctxChkFlags" class="ctx-checkbox">
+                <span class="ctx-label-text">Flags</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle Lanes Group Moving with Picks">
+                <input type="checkbox" id="ctxChkLanes" class="ctx-checkbox">
+                <span class="ctx-label-text">Lanes</span>
+              </label>
+
+              <label class="context-menu-item ctx-checkbox-label" title="Toggle Spells Group Moving with Picks">
+                <input type="checkbox" id="ctxChkSpells" class="ctx-checkbox">
+                <span class="ctx-label-text">Spells</span>
+              </label>
+
+              <div class="context-menu-divider"></div>
+              <div class="context-menu-section-label">ALIGN</div>
+              <button type="button" class="context-menu-item" id="ctxAlignLeft" title="Align Column Left (Snap X)">
+                <span class="ctx-label-text">Align</span>
+              </button>
+              <button type="button" class="context-menu-item" id="ctxDistributeVertically" title="Distribute Vertically (Step 172px)">
+                <span class="ctx-label-text">Distribute</span>
+              </button>
+              <button type="button" class="context-menu-item" id="ctxAlignOfficialSpec" title="Align to Official MLBB Spec">
+                <span class="ctx-label-text">Default</span>
+              </button>
+              
+              <div class="context-menu-divider"></div>
+              <div class="context-menu-section-label">ACTIONS</div>
+              <button type="button" class="context-menu-item" id="ctxResetSingleSlot" style="color: #f87171;" title="Reset this slot to MLBB default">
+                <span class="ctx-label-text">Reset</span>
+              </button>
+              <button type="button" class="context-menu-item" id="ctxSaveDimensionsQuick" style="color: var(--cyan-accent); font-weight: 700;" title="Save and apply dimensions">
+                <span class="ctx-label-text">Save</span>
+              </button>
+            </div>
+
+            <div id="canvasPlaceholder" class="canvas-placeholder-text">
+              <span>Drag & drop an MLBB screenshot here, or click "📸 Live Scan"</span>
+            </div>
+          </div>
+
+          <div style="font-size: 10.5px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; gap: 12px;">
+              <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; color: #38bdf8; font-weight: 700;">
+                <input type="checkbox" id="chkShowROIs" checked style="accent-color: var(--cyan-accent);"> Hero Slots (Bans & Picks)
+              </label>
+              <label style="cursor: pointer; display: flex; align-items: center; gap: 4px; color: #10b981; font-weight: 700;">
+                <input type="checkbox" id="chkShowSubElements" checked style="accent-color: #10b981;"> Sub-Elements (Flag, Lane, Spell)
+              </label>
+            </div>
+            <span style="color: var(--text-gray); font-size: 10px;">💡 Triple-click slot border to edit • Right-click for Group / Ungroup / Align • Mouse wheel to zoom</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- DRAGGABLE PANEL SPLITTER RESIZER -->
+      <div class="panel-resizer-splitter" id="panelResizerSplitter" title="Drag left/right to resize panels">
+        <div class="splitter-handle-bar"></div>
+      </div>
+
+      <!-- RIGHT COLUMN: DETECTION RESULTS & TELEMETRY -->
+      <aside class="card-panel results-panel-scroll right-panel" id="rightPanel">
+        
+        <!-- 1. Detected Game Phase (Single Compact Row) -->
+        <div class="phase-banner-card">
+          <div class="phase-left-info">
+            <span class="phase-label">Game Phase:</span>
+            <span class="phase-title" id="detectedPhaseName">Awaiting Analysis...</span>
+          </div>
+          <div class="phase-right-info">
+            <span class="phase-details-text" id="detectedPhaseDetails">Awaiting Frame</span>
+            <span class="confidence-badge" id="detectedPhaseConfidence">--% Match</span>
+          </div>
+        </div>
+
+        <!-- 2. Ban Slots (Title & 10 Slots in 1 Single Row) -->
+        <div class="results-section-card ban-row-card">
+          <div class="ban-title-label">
+            <span style="font-size: 12px; font-weight: 900; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px;">Ban</span>
+          </div>
+          <div class="ten-bans-row" id="detectedTenBansRow">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- 3. Pick Slots (Title & 10 Slots in 1 Single Row with Icons & Lanes) -->
+        <div class="results-section-card pick-row-card">
+          <div class="pick-title-label">
+            <span style="font-size: 12px; font-weight: 900; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.5px;">Pick</span>
+          </div>
+          <div class="ten-picks-row" id="detectedTenPicksRow">
+            <!-- Populated dynamically via JS -->
+          </div>
+        </div>
+
+        <!-- 4. Pipeline Timings & Visual Latency Chart -->
+        <div class="results-section-card telemetry-card">
+          <div class="telemetry-header">
+            <div class="telemetry-title-group">
+              <span class="telemetry-icon">⚡</span>
+              <div>
+                <div class="telemetry-title">Pipeline Latency & Telemetry Chart</div>
+                <div class="telemetry-subtitle">Sub-10ms In-Memory Multi-Feature Inference Breakdown</div>
+              </div>
+            </div>
+            <div class="telemetry-fps-badge" id="telemetryFpsBadge">-- FPS</div>
+          </div>
+
+          <!-- Visual Segmented Latency Bar Chart -->
+          <div class="latency-bar-container">
+            <div class="latency-bar-track">
+              <div class="latency-segment extraction" id="latencyBarExtraction" style="width: 25%;" title="Extraction: 0ms"></div>
+              <div class="latency-segment ban-zncc" id="latencyBarBan" style="width: 35%;" title="Ban ZNCC: 0ms"></div>
+              <div class="latency-segment pick-zncc" id="latencyBarPick" style="width: 40%;" title="Pick ZNCC: 0ms"></div>
+            </div>
+            <div class="latency-legend">
+              <span class="legend-item"><span class="dot dot-extract"></span> Extraction: <b id="timingExtraction">0.0ms</b></span>
+              <span class="legend-item"><span class="dot dot-ban"></span> Ban ZNCC: <b id="timingBan">0.0ms</b></span>
+              <span class="legend-item"><span class="dot dot-pick"></span> Pick ZNCC: <b id="timingPick">0.0ms</b></span>
+              <span class="legend-item total"><span class="dot dot-total"></span> Total: <b id="timingTotal">0.0ms</b></span>
+            </div>
+          </div>
+
+          <!-- Telemetry Table Filter Bar -->
+          <div class="table-filter-bar">
+            <div class="filter-tabs">
+              <button class="filter-tab active" data-filter="all">All Slots (20)</button>
+              <button class="filter-tab" data-filter="bans">Bans (10)</button>
+              <button class="filter-tab" data-filter="picks">Picks (10)</button>
+              <button class="filter-tab" data-filter="matched">Locked Only</button>
+            </div>
+            <button id="btnCopyJson" class="btn btn--secondary btn--compact" style="padding: 2px 8px; font-size: 10.5px;">📋 Copy JSON</button>
+          </div>
+
+          <!-- 20-Slot Text-Only Telemetry Table (No Icons, Rank 1/2/3 Percentages & Status) -->
+          <div class="telemetry-table-wrapper">
+            <table class="telemetry-table" id="telemetryTable">
+              <thead>
+                <tr>
+                  <th style="width: 28px;">#</th>
+                  <th style="width: 90px;">Slot Key</th>
+                  <th>1st Choice</th>
+                  <th>2nd Choice</th>
+                  <th>3rd Choice</th>
+                  <th style="text-align: right; width: 100px;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="telemetryTableBody">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 18px 0;">
+                    Awaiting Frame Analysis to Populate Telemetry Matrix...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Collapsible Raw JSON Drawer -->
+          <details class="telemetry-json-drawer">
+            <summary class="json-drawer-summary">
+              <span>View Raw JSON Telemetry Payload</span>
+              <span class="json-drawer-hint">Click to expand</span>
+            </summary>
+            <pre class="telemetry-code-box" id="telemetryJsonBox">// Awaiting frame analysis...</pre>
+          </details>
+        </div>
+
+      </aside>
+
+    </main>
+
+  </div>
+
+  <script src="../js/heroes-items.js"></script>
+  <script src="../js/checker.js"></script>
+</body>
+</html>

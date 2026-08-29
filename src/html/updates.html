@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLBB Companion — Patch Notes & Sync Telemetry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="stylesheet" href="../css/main.css">
+  <link rel="stylesheet" href="../css/navbar.css">
+  <link rel="stylesheet" href="../css/updates.css">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- Top Global Header -->
+    <header class="app-header-nav">
+      <div class="brand-wrapper">
+        <img src="../assets/img/logo.png" alt="Logo" class="brand-logo">
+        <div>
+          <h1 class="brand-title">MLBB COMPANION</h1>
+          <p class="brand-subtitle">Patch Notes, Balance Adjustments & Sync Logs</p>
+        </div>
+      </div>
+      
+      <nav class="nav-links-group">
+        <a href="draft_pick.html" class="nav-link-item">Draft Pick</a>
+        <a href="checker.html" class="nav-link-item">Manual Checker</a>
+        <a href="updates.html" class="nav-link-item active">Updates</a>
+      </nav>
+    </header>
+
+    <!-- Search & Filter Controls -->
+    <div class="patch-search-bar">
+      <input type="text" id="patchSearchInput" class="input-text" placeholder="Search patch changes (e.g. Cecilion, Immortality, Baxia)..." autocomplete="off" style="flex: 1; max-width: 460px;">
+      
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">FILTER:</span>
+        <button class="btn btn--secondary btn--compact patch-filter-btn active" data-type="all">All</button>
+        <button class="btn btn--secondary btn--compact patch-filter-btn" data-type="buff">Buffs</button>
+        <button class="btn btn--secondary btn--compact patch-filter-btn" data-type="nerf">Nerfs</button>
+        <button class="btn btn--secondary btn--compact patch-filter-btn" data-type="adjust">Adjust</button>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <main class="patch-workspace-grid">
+      
+      <!-- LEFT COLUMN: VERSION SELECTOR -->
+      <aside class="card-panel version-list-pane" id="versionListPane">
+        <!-- Populated dynamically via updates.js -->
+      </aside>
+
+      <!-- RIGHT COLUMN: PATCH DETAILS & ADJUSTMENTS -->
+      <section class="card-panel patch-details-pane">
+        
+        <!-- Active Patch Header -->
+        <div class="patch-detail-header">
+          <div class="patch-detail-title" id="activeVersionTitle">Patch Notes Loading...</div>
+          <div class="patch-detail-summary" id="activeVersionSummary">
+            Detailed balance changes, hero adjustments, and item modifications.
+          </div>
+        </div>
+
+        <!-- Hero Adjustments Section -->
+        <div>
+          <div class="section-title">
+            <span>🛡️ Hero Balance Adjustments</span>
+          </div>
+          <div class="changes-list-grid" id="heroChangesContainer">
+            <!-- Populated via updates.js -->
+          </div>
+        </div>
+
+        <!-- Item Adjustments Section -->
+        <div>
+          <div class="section-title">
+            <span>⚔️ Equipment & Item Changes</span>
+          </div>
+          <div class="changes-list-grid" id="itemChangesContainer">
+            <!-- Populated via updates.js -->
+          </div>
+        </div>
+
+        <!-- Live Sync & Telemetry Logs -->
+        <div>
+          <div class="section-title">
+            <span>📡 Real-Time Sync & BlueStacks Telemetry Logs</span>
+          </div>
+          <div class="telemetry-box" id="telemetryConsole">
+            [SYSTEM] MLBB Telemetry Hub Initialized.<br>
+            [SYSTEM] Listening to BlueStacks 5 (Nougat32 / com.mobile.legends) via Port 5555...
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <script src="../js/patch-notes.js"></script>
+  <script src="../js/updates.js"></script>
+</body>
+</html>

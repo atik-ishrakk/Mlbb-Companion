@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MLBB Companion</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="../assets/img/logo.png">
+  <link rel="stylesheet" href="../css/popup.css">
+</head>
+<body>
+  <div class="popup-wrapper">
+    
+    <!-- 1. Header Bar -->
+    <header class="popup-header">
+      <div class="popup-brand">
+        <div class="logo-wrapper">
+          <img src="../assets/img/logo.png" alt="Logo" class="popup-logo">
+        </div>
+        <div class="brand-text">
+          <span class="popup-title">MLBB COMPANION</span>
+          <span class="popup-subtitle">ENTERPRISE DRAFT SUITE</span>
+        </div>
+      </div>
+      <button id="btnOpenBrowser" class="btn-header-browser status-offline" title="Open 5v5 Live Draft Pick Board in Browser">
+        BROWSER
+      </button>
+    </header>
+
+    <!-- 2. Primary Telemetry: Live Game Phase Banner -->
+    <div class="game-phase-banner">
+      <span class="phase-label">GAME PHASE</span>
+      <span class="phase-badge" id="popGamePhase">STANDBY</span>
+    </div>
+
+    <!-- 3. Integrated Enterprise Control Cards -->
+    <div class="modules-container">
+      
+      <!-- Module 1: BlueStacks 5 Emulator (Hint indicates: Closed / Opened / Running) -->
+      <div class="enterprise-module bs-module is-active" id="moduleBs">
+        <div class="module-info-col">
+          <span class="module-name">BlueStacks 5</span>
+          <span class="module-subtext" id="bsToggleDesc">Closed</span>
+        </div>
+        <label class="switch-toggle" title="BlueStacks 5: Launch / Close Emulator">
+          <input type="checkbox" id="bsInstanceToggle">
+          <span class="slider-round slider-bluestacks"></span>
+        </label>
+      </div>
+
+      <!-- Module 2: Live CV & Auto-Sync Engine (No subtitle hint) -->
+      <div class="enterprise-module cv-module is-active" id="moduleCv">
+        <div class="module-info-col">
+          <span class="module-name">Live CV & Auto-Sync</span>
+        </div>
+        <label class="switch-toggle" title="Live CV: Auto-Sync Draft Picks & Bans">
+          <input type="checkbox" id="cvAutoSyncToggle" checked>
+          <span class="slider-round slider-cv"></span>
+        </label>
+      </div>
+
+      <!-- Module 3: Backend API Server (Clickable Bridge Link) -->
+      <div class="enterprise-module server-module is-active" id="moduleServer">
+        <div class="module-info-col">
+          <span class="module-name">Backend API Server</span>
+          <span class="module-subtext" id="serverToggleDesc">Bridge: <a id="popPortLink" class="bridge-link" href="http://127.0.0.1:5000/status" target="_blank" title="Click to view live API status in browser">127.0.0.1:5555</a></span>
+        </div>
+        <label class="switch-toggle" title="Backend Server: Start / Stop Engine">
+          <input type="checkbox" id="serverPowerToggle" checked>
+          <span class="slider-round slider-server"></span>
+        </label>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="../js/popup.js"></script>
+</body>
+</html>
