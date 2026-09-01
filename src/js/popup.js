@@ -1,7 +1,14 @@
 /**
- * MLBB Companion — Extension Toolbar Popup (popup.js)
- * Clean Header "Browser" Button + 3 Independent Switches
+ * IMPORTANT:
+ * popup.js is UI ONLY.
+ * It does NOT:
+ *   - launch BlueStacks
+ *   - start/stop the server
+ *   - navigate the active tab
+ *   - control CV directly
+ * All runtime control goes through service_worker.js.
  */
+
 (function () {
   'use strict';
 
