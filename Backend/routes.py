@@ -33,7 +33,7 @@ from process import (
     get_adb_binary,
     is_bluestacks_process_running,
 )
-from phase_matcher import PhaseMatcher
+from matcher import Matcher
 
 
 class ConnectionState:
@@ -95,14 +95,14 @@ class ADBConnector:
         self.last_frame_hash = ""
         self.frame_lock = threading.Lock()
 
-        if PhaseMatcher is not None:
+        if Matcher is not None:
             try:
-                self.phase_matcher: Optional[PhaseMatcher] = PhaseMatcher(project_root)
+                self.matcher: Optional[Matcher] = Matcher(project_root)
             except Exception as e:
-                print(f"[ADB WARNING] PhaseMatcher initialization failed: {e}")
-                self.phase_matcher = None
+                print(f"[ADB WARNING] Matcher initialization failed: {e}")
+                self.matcher = None
         else:
-            self.phase_matcher = None
+            self.matcher = None
 
         self._latest_phase_info: Dict[str, Any] = {
             "phase": "Standby",
