@@ -6,7 +6,7 @@
   <title>MLBB Companion — 5v5 Live Draft Pick & Strategy Hub</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="../assets/img/logo.png">
   <link rel="stylesheet" href="../css/main.css">
   <link rel="stylesheet" href="../css/navbar.css">
@@ -21,15 +21,15 @@
       <div class="brand-wrapper">
         <img src="../assets/img/logo.png" alt="Logo" class="brand-logo">
         <div>
-          <h1 class="brand-title">MLBB COMPANION</h1>
-          <p class="brand-subtitle">5v5 Live Draft Pick & Real-Time Strategy Engine</p>
+          <h1 class="brand-title">MLBB <span class="brand-title-accent">COMPANION</span></h1>
+          <p class="brand-subtitle">DRAFTING ASSISTANT & STRATEGY HUB</p>
         </div>
       </div>
       
       <nav class="nav-links-group">
         <a href="draft_pick.html" class="nav-link-item active">Draft Pick</a>
-        <a href="checker.html" class="nav-link-item">Manual Checker</a>
-        <a href="updates.html" class="nav-link-item">Updates</a>
+        <a href="checker.html" class="nav-link-item">Vision Calibration</a>
+        <a href="updates.html" class="nav-link-item">Patches</a>
       </nav>
     </header>
 
@@ -42,12 +42,13 @@
         <!-- Clean Control Panel Bar -->
         <div class="control-panel-bar">
           <div class="ban-lobby-group">
-            <span class="ban-lobby-label">BAN FORMAT</span>
+            <span class="ban-lobby-label">DRAFT</span>
             <div class="rank-selector-group" id="rankSelector">
-              <button class="rank-btn" data-bans="3">3 BANS</button>
-              <button class="rank-btn" data-bans="4">4 BANS</button>
-              <button class="rank-btn active" data-bans="5">5 BANS</button>
+              <button class="rank-btn" data-bans="3" aria-label="3-ban lobby">3</button>
+              <button class="rank-btn" data-bans="4" aria-label="4-ban lobby">4</button>
+              <button class="rank-btn active" data-bans="5" aria-label="5-ban lobby">5</button>
             </div>
+            <span class="ban-lobby-suffix">BAN LOBBY</span>
           </div>
           <button id="resetDraftBtn" class="btn btn--secondary btn--compact esports-btn-reset" title="Reset all draft slots">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -58,12 +59,8 @@
         <!-- 5v5 Board: Blue vs Red with Central Lane Anchors -->
         <div class="teams-wrapper">
           
-          <!-- ALLY (BLUE) SIDE -->
+          <!-- ALLY SIDE -->
           <div class="team-column-card">
-            <div class="team-header-bar team-header--ally">
-              <span class="team-header-badge"><span class="glow-dot glow-dot--ally"></span> BLUE ALLY</span>
-            </div>
-
             <!-- Ally Bans -->
             <div class="bans-row-container" id="allyBansContainer">
               <!-- Populated dynamically via draft_pick.js -->
@@ -75,42 +72,8 @@
             </div>
           </div>
 
-          <!-- CENTRAL LANE MATCHUP DIVIDER COLUMN -->
-          <div class="lanes-divider-column">
-            <div class="lanes-divider-header">
-              <span>VS</span>
-            </div>
-            <div class="bans-divider-spacer"></div>
-            <div class="lanes-axis-list" id="lanesAxisList">
-              <div class="lane-axis-node lane--exp" data-lane="exp" title="EXP Lane Matchup">
-                <span class="lane-axis-indicator"></span>
-                <span class="lane-axis-text">EXP</span>
-              </div>
-              <div class="lane-axis-node lane--jungle" data-lane="jungle" title="Jungle Matchup">
-                <span class="lane-axis-indicator"></span>
-                <span class="lane-axis-text">JNG</span>
-              </div>
-              <div class="lane-axis-node lane--mid" data-lane="mid" title="Mid Lane Matchup">
-                <span class="lane-axis-indicator"></span>
-                <span class="lane-axis-text">MID</span>
-              </div>
-              <div class="lane-axis-node lane--gold" data-lane="gold" title="Gold Lane Matchup">
-                <span class="lane-axis-indicator"></span>
-                <span class="lane-axis-text">GLD</span>
-              </div>
-              <div class="lane-axis-node lane--roam" data-lane="roam" title="Roam Matchup">
-                <span class="lane-axis-indicator"></span>
-                <span class="lane-axis-text">ROM</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- ENEMY (RED) SIDE -->
+          <!-- ENEMY SIDE -->
           <div class="team-column-card">
-            <div class="team-header-bar team-header--enemy">
-              <span class="team-header-badge"><span class="glow-dot glow-dot--enemy"></span> RED ENEMY</span>
-            </div>
-
             <!-- Enemy Bans -->
             <div class="bans-row-container" id="enemyBansContainer">
               <!-- Populated dynamically via draft_pick.js -->
@@ -123,27 +86,32 @@
           </div>
 
         </div>
+
+        <!-- Bottom Left Phase Button Container -->
+        <div class="draft-board-footer">
+          <button id="gamePhaseBtn" class="phase-status-badge" title="Live In-Game Phase Status">
+            Phase: <span id="gamePhaseText">N/A</span>
+          </button>
+        </div>
+        <div class="draft-resize-handle" id="draftResizeHandle" aria-hidden="true" title="Drag to resize draft panel"></div>
       </section>
 
       <!-- RIGHT COLUMN: DYNAMIC STRATEGY HUB -->
       <aside class="card-panel strategy-hub-scroll">
         <div class="panel-header">
-          <h2 class="panel-title"><span class="hud-prefix">//</span> STRATEGY ENGINE</h2>
-          <span class="status-indicator active" id="engineStatus">LIVE SYNC ACTIVE</span>
+          <h2 class="panel-title">STRATEGY ENGINE</h2>
         </div>
 
         <!-- 1. Win Probability & Synergy Meter -->
         <div class="strategy-card win-prob-card">
           <div class="win-prob-header-row">
             <div class="faction-score-tag ally-score-tag">
-              <span class="faction-dot ally-dot"></span>
-              <span>BLUE ALLY</span>
+              <span>ALLY</span>
               <strong id="ally-win-prob-text" class="score-number">50%</strong>
             </div>
             <div class="faction-score-tag enemy-score-tag">
               <strong id="enemy-win-prob-text" class="score-number">50%</strong>
-              <span>RED ENEMY</span>
-              <span class="faction-dot enemy-dot"></span>
+              <span>ENEMY</span>
             </div>
           </div>
 
@@ -272,6 +240,40 @@
 
         <div class="modal-items-grid" id="modalItemGrid">
           <!-- Populated dynamically via draft_pick.js -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Battle Spell Selection Modal Overlay -->
+  <div class="modal-overlay hidden" id="spellSelectModal" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalSpellTitle" class="modal-title-text text-cyan"><span class="hud-prefix">//</span> SELECT BATTLE SPELL</h3>
+        <div class="modal-header-actions">
+          <span class="esc-hint-tag">ESC TO CLOSE</span>
+          <button id="btnCloseSpellModal" class="modal-close-btn" title="Close (Esc)">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-toolbar-row">
+          <div class="modal-filter-bar" id="spellCategoryFilterBar">
+            <button class="filter-btn active" data-category="All">ALL</button>
+            <button class="filter-btn" data-category="Mobility">MOBILITY</button>
+            <button class="filter-btn" data-category="Combat">COMBAT</button>
+            <button class="filter-btn" data-category="Defense">DEFENSE</button>
+            <button class="filter-btn" data-category="Support">SUPPORT</button>
+            <button class="filter-btn" data-category="Jungle">JUNGLE</button>
+          </div>
+
+          <div class="modal-search-wrapper">
+            <input type="text" id="spellSearchInput" class="modal-search-input" placeholder="Search spell or cooldown..." autocomplete="off">
+          </div>
+        </div>
+
+        <div class="modal-spells-grid" id="modalSpellGrid">
+          <!-- Populated dynamically via draft_pick-modal.js -->
         </div>
       </div>
     </div>

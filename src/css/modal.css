@@ -394,3 +394,158 @@
   border: 1px solid rgba(245, 158, 11, 0.3);
   display: inline-block;
 }
+
+/* ==========================================================================
+   Modal Battle Spell Selection Grid — High-Impact Combat Matrix
+   ========================================================================== */
+.modal-spells-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  align-content: start;
+  justify-content: start;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 6px 16px 2px;
+}
+
+.grid-spell-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  background: rgba(10, 16, 36, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 10px 10px 10px;
+  min-height: 150px;
+  max-height: 165px;
+  box-sizing: border-box;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.grid-spell-card:hover {
+  border-color: #38bdf8;
+  background: rgba(6, 182, 212, 0.12);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.35);
+  z-index: 5;
+}
+
+.grid-spell-card.is-selected {
+  border-color: #38bdf8 !important;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.25) 0%, rgba(2, 132, 199, 0.35) 100%) !important;
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.7), inset 0 0 12px rgba(56, 189, 248, 0.25) !important;
+}
+
+.grid-spell-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(2, 6, 23, 0.9);
+  border: 1.5px solid rgba(56, 189, 248, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  margin-bottom: 6px;
+}
+
+.grid-spell-card:hover .grid-spell-avatar {
+  transform: scale(1.1);
+  border-color: #00f0ff;
+  box-shadow: 0 0 16px rgba(0, 240, 255, 0.6);
+}
+
+.grid-spell-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.grid-spell-icon {
+  font-size: 22px;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.grid-spell-card:hover .grid-spell-icon {
+  transform: scale(1.15);
+}
+
+.grid-spell-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+
+.grid-spell-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.2;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.grid-spell-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.grid-spell-tag {
+  font-size: 8px;
+  font-weight: 900;
+  color: #38bdf8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.grid-spell-cd {
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
+  font-weight: 900;
+  color: #facc15;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  padding: 1.5px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+}
+
+.grid-spell-desc {
+  font-size: 9.5px;
+  color: #94a3b8;
+  line-height: 1.25;
+  margin-top: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

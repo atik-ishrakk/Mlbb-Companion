@@ -30,7 +30,8 @@
   --purple-accent: #a855f7;
 
   /* Typography & Layout */
-  --font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family: 'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;

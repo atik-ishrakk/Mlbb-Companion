@@ -1,582 +1,315 @@
 # =============================================================================
-#   MLBB COMPANION — FLASK REST API ROUTER & CONTROLLER (routes.py)
+# MLBB COMPANION — HIGH-PERFORMANCE ADB ENGINE & CONNECTOR (connector.py)
 # =============================================================================
-#   Role & Purpose in Project:
-#     This file defines the HTTP REST API endpoints serving the Chrome/Brave Extension
-#     frontend, live web dashboard, and diagnostic checker tools.
-#     
-#     Direct Matcher Architecture:
-#       Directly integrates and orchestrates the 4 standalone high-precision matchers:
-#       1. PhaseMatcher    : 17 invariant anchors & temporal phase FSM
-#       2. BanMatcher      : Circular masked ZNCC ban classifier (Slots 0..9)
-#       3. AllyPickMatcher : Left-aligned rectangular ally pick classifier (Slots 0..4)
-#       4. EnemyPickMatcher: Right-aligned mirrored rectangular enemy pick classifier (Slots 5..9)
+# Role & Purpose in Project:
+#   This file manages live communication between the MLBB Companion backend and
+#   the BlueStacks Android emulator instance over ADB.
+#
+# Key Functions:
+#   1. Asynchronous Frame Capturing: Dedicated background thread continuously captures
+#      game frames via ADB exec-out screencap with direct C++ OpenCV in-memory decoding.
+#   2. Memory-Only Rolling Ring Buffer: Stores recent frames in RAM (maxlen=30) with
+#      zero disk writes for instant retrieval and analysis.
+#   3. Connection State Machine: Manages transitions (DISCONNECTED, CONNECTED, GAME_RUNNING)
+#      with automatic health checks and exponential backoff retry.
+#   4. Focused Window Watchdog: Inspects Android window focus via dumpsys window to
+#      detect whether MLBB is on launcher, splash loading, or active 3D gameplay.
 # =============================================================================
 
 import os
 import sys
-
-sys.dont_write_bytecode = True
-os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
-
-import json
 import time
-import base64
+import hashlib
 import subprocess
-from typing import Dict, List, Any, Optional, Set, Tuple
+import threading
+from collections import deque
+from typing import Optional, Tuple, Dict, List, Any, Union, Set, Deque
 
 import cv2
 import numpy as np
-import pygetwindow as gw
-import pyautogui
-from flask import Flask, jsonify, request
-from flask_cors import CORS
 
-backend_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(backend_dir, ".."))
-
-from roi import (
-    ScreenAnalyzer,
-    extract_ban_regions,
-    extract_pick_regions,
-    extract_ally_pick_regions,
-    extract_enemy_pick_regions,
-    extract_ban_area,
-    extract_pick_area,
-    DEFAULT_ROIS,
+from process import (
+    get_bluestacks_ports_from_config,
+    get_adb_binary,
+    is_bluestacks_process_running,
 )
-from phase_matcher import PhaseMatcher, get_phase_anchor_db
-from ban_matcher import BanMatcher
-from ally_pick_matcher import AllyPickMatcher
-from enemy_pick_matcher import EnemyPickMatcher
-from cache import get_gpu_cache
-from process import is_bluestacks_process_running, get_bluestacks_ports_from_config
-from connector import ADBConnector
-from shutdown import kill_by_process_name, close_everything
-
-app = Flask(__name__)
-CORS(app)
-
-# Global singleton standalone matchers
-global_analyzer = ScreenAnalyzer()
-global_phase_matcher = PhaseMatcher(project_root)
-global_ban_matcher = BanMatcher(project_root)
-global_ally_pick_matcher = AllyPickMatcher(project_root, analyzer=global_analyzer)
-global_enemy_pick_matcher = EnemyPickMatcher(project_root, analyzer=global_analyzer)
-global_gpu_cache = get_gpu_cache(project_root)
-global_adb: Optional[ADBConnector] = None
+from phase_matcher import PhaseMatcher
 
 
-def get_adb_connector() -> ADBConnector:
-    global global_adb
-    if global_adb is None:
-        global_adb = ADBConnector(project_root=project_root)
-    return global_adb
+class ConnectionState:
+    DISCONNECTED = "DISCONNECTED"
+    DETECTING = "DETECTING"
+    CONNECTING = "CONNECTING"
+    CONNECTED = "CONNECTED"
+    GAME_RUNNING = "GAME_RUNNING"
+    STREAMING = "STREAMING"
+    ERROR = "ERROR"
 
 
-def capture_target_window() -> Optional[np.ndarray]:
+class DeviceHealth:
+    """Persistent Health Monitor for tracking ADB ping, frame latency, and failures."""
+
+    def __init__(self):
+        self.last_success_time = 0.0
+        self.last_frame_time = 0.0
+        self.last_ping_time = 0.0
+        self.consecutive_failures = 0
+        self.retry_delay = 1.0
+
+    def record_success(self):
+        now = time.time()
+        self.last_success_time = now
+        self.last_frame_time = now
+        self.consecutive_failures = 0
+        self.retry_delay = 1.0
+
+    def record_failure(self):
+        self.consecutive_failures += 1
+        self.retry_delay = min(16.0, 2.0 ** min(self.consecutive_failures, 4))
+
+
+class ADBConnector:
     """
-    Captures active screen frame prioritizing:
-    1. ADB direct framebuffer (if connected)
-    2. BlueStacks App Player OS window screenshot (via PyAutoGUI / pygetwindow)
-    3. Full desktop display fallback
+    High-Performance Asynchronous ADB Engine featuring Connection State Machine,
+    Dedicated Connection Thread, Frame Hashing, and Fast Direct C++ Decoding.
     """
-    # 1. Check ADB screencap
-    try:
-        adb = get_adb_connector()
-        if adb.connected:
-            frame = adb.capture_screen()
-            if frame is not None and frame.size > 0:
-                return frame
-    except Exception:
-        pass
 
-    # 2. Check BlueStacks desktop window
-    try:
-        targets = gw.getWindowsWithTitle('BlueStacks App Player') or gw.getWindowsWithTitle('BlueStacks')
-        if targets:
-            win = targets[0]
-            if win.isMinimized:
-                win.restore()
-            if win.width > 100 and win.height > 100:
-                screenshot = pyautogui.screenshot(region=(win.left, win.top, win.width, win.height))
-                frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-                return frame
-    except Exception:
-        pass
+    def __init__(self, port: int = 5555, project_root: Optional[str] = None):
+        self.adb_bin = get_adb_binary()
+        self.default_port = port
+        self.last_device: Optional[str] = f"127.0.0.1:{port}"
+        self.devices: Dict[str, Any] = {}
 
-    # 3. Fallback fullscreen screenshot
-    try:
-        screenshot = pyautogui.screenshot()
-        return cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
-    except Exception:
+        # RAM-only rolling screenshot ring buffer (bounded maxlen=30 to prevent memory growth)
+        self._ram_screenshot_ring: Deque[Tuple[float, np.ndarray]] = deque(maxlen=30)
+        self._ram_ring_lock = threading.Lock()
+
+        # 3.0s Hold / Debounce Timestamps
+        self.last_bs_ping_success_time = 0.0
+        self.last_game_ping_success_time = 0.0
+        self.hold_grace_period_sec = 3.0
+
+        self.state = ConnectionState.DISCONNECTED
+        self.health = DeviceHealth()
+        self.current_frame: Optional[np.ndarray] = None
+        self.last_frame_hash = ""
+        self.frame_lock = threading.Lock()
+
+        if PhaseMatcher is not None:
+            try:
+                self.phase_matcher: Optional[PhaseMatcher] = PhaseMatcher(project_root)
+            except Exception as e:
+                print(f"[ADB WARNING] PhaseMatcher initialization failed: {e}")
+                self.phase_matcher = None
+        else:
+            self.phase_matcher = None
+
+        self._latest_phase_info: Dict[str, Any] = {
+            "phase": "Standby",
+            "confidence": 0.0,
+            "details": "Standby",
+            "sub_phase": None,
+            "is_transient": False
+        }
+        self._phase_lock = threading.Lock()
+        self.is_running = False
+        self._bg_thread: Optional[threading.Thread] = None
+        self._start_background_thread()
+
+    @property
+    def connected(self) -> bool:
+        bs_running, _ = is_bluestacks_process_running()
+        if not bs_running:
+            return False
+        now = time.time()
+        return (now - self.last_bs_ping_success_time < self.hold_grace_period_sec) or (
+            self.state in [ConnectionState.CONNECTED, ConnectionState.GAME_RUNNING, ConnectionState.STREAMING]
+        )
+
+    def _start_background_thread(self):
+        """Dedicated Connection & Frame Capture Background Thread."""
+        self.is_running = True
+        self._bg_thread = threading.Thread(target=self._connection_loop, daemon=True)
+        self._bg_thread.start()
+
+    def _connection_loop(self):
+        """
+        Background thread main loop:
+        1. Checks if BlueStacks HD-Player.exe is active.
+        2. Only polls ADB when BlueStacks is actually running.
+        3. Completely idle with 0 CPU overhead when BlueStacks is closed.
+        """
+        while self.is_running:
+            try:
+                now = time.time()
+                bs_running, port = is_bluestacks_process_running()
+
+                if not bs_running:
+                    if self.state != ConnectionState.DISCONNECTED:
+                        self._transition_to(ConnectionState.DISCONNECTED)
+                    time.sleep(1.0)
+                    continue
+
+                # BlueStacks is active: Ping ADB device
+                bs_ping_ok = self._ping_device()
+                if bs_ping_ok:
+                    self.last_bs_ping_success_time = now
+                    self.health.record_success()
+                else:
+                    if now - self.last_bs_ping_success_time >= self.hold_grace_period_sec:
+                        if self._verify_cached_device():
+                            self.last_bs_ping_success_time = now
+                            self.health.record_success()
+                        else:
+                            active_dev = self._enumerate_devices()
+                            if active_dev:
+                                self.last_device = active_dev
+                                self.last_bs_ping_success_time = now
+                                self.health.record_success()
+                            else:
+                                if self._attempt_connect(f"127.0.0.1:{port}"):
+                                    self.last_device = f"127.0.0.1:{port}"
+                                    self.last_bs_ping_success_time = now
+                                    self.health.record_success()
+
+                bs_alive = (now - self.last_bs_ping_success_time < self.hold_grace_period_sec)
+
+                if bs_alive:
+                    app_state, pkg = self.get_focused_app_state()
+
+                    if app_state == "STANDBY":
+                        target_state = ConnectionState.CONNECTED
+                        if self.state != target_state:
+                            self._transition_to(target_state)
+                        with self._phase_lock:
+                            self._latest_phase_info = {
+                                "phase": "Standby",
+                                "confidence": 1.0,
+                                "details": "BlueStacks Launcher (Direct ADB Watchdog)",
+                                "sub_phase": None,
+                                "is_transient": False
+                            }
+                        time.sleep(0.35)
+                        continue
+
+                    if app_state == "LOADING":
+                        self.last_game_ping_success_time = now
+                        target_state = ConnectionState.GAME_RUNNING
+                        if self.state != target_state:
+                            self._transition_to(target_state)
+                        with self._phase_lock:
+                            self._latest_phase_info = {
+                                "phase": "Loading",
+                                "confidence": 1.0,
+                                "details": "MLBB Game Splash Loading (Direct ADB)",
+                                "sub_phase": None,
+                                "is_transient": False
+                            }
+                        time.sleep(0.35)
+                        continue
+
+                    # app_state == "GAME_ACTIVE" -> 3D Unity surface rendered
+                    self.last_game_ping_success_time = now
+                    target_state = ConnectionState.GAME_RUNNING
+                    if self.state != target_state:
+                        self._transition_to(target_state)
+
+                    frame = self._fetch_frame_internal()
+                    if frame is not None:
+                        self.last_bs_ping_success_time = now
+                        with self.frame_lock:
+                            self.current_frame = frame
+                        self.push_ram_screenshot(frame)
+
+                        # Real-time In-Memory Game Phase Classification
+                        if self.phase_matcher is not None:
+                            phase_res = self.phase_matcher.match_phase(frame)
+                        else:
+                            phase_res = {
+                                "phase": "In Game",
+                                "confidence": 0.5,
+                                "details": "PhaseMatcher unavailable",
+                                "sub_phase": None,
+                                "is_transient": False
+                            }
+
+                        with self._phase_lock:
+                            self._latest_phase_info = phase_res
+
+                        p_name = phase_res.get("phase")
+                        if p_name and p_name not in ["Unknown", "N/A", "Standby"]:
+                            self.last_game_ping_success_time = now
+                    else:
+                        if self.state != ConnectionState.DISCONNECTED:
+                            self._transition_to(ConnectionState.DISCONNECTED)
+                        with self._phase_lock:
+                            self._latest_phase_info = {
+                                "phase": "Standby",
+                                "confidence": 0.0,
+                                "details": "BlueStacks Disconnected",
+                                "sub_phase": None,
+                                "is_transient": False
+                            }
+
+            except Exception:
+                pass
+
+            sleep_time = 0.25 if self.connected else 1.0
+            time.sleep(sleep_time)
+
+    def _transition_to(self, new_state: str):
+        if self.state != new_state:
+            print(f"[ADB STATE] Transition: {self.state} -> {new_state}")
+            self.state = new_state
+
+    def _verify_cached_device(self) -> bool:
+        """Check cached last_device using fast adb get-state."""
+        if not self.last_device:
+            return False
+        creationflags = 0x08000000 if os.name == 'nt' else 0
+        try:
+            cmd = [self.adb_bin, "-s", self.last_device, "get-state"]
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=1.5,
+                                 stdin=subprocess.DEVNULL, creationflags=creationflags)
+            return "device" in res.stdout.strip().lower()
+        except Exception:
+            return False
+
+    def _enumerate_devices(self) -> Optional[str]:
+        creationflags = 0x08000000 if os.name == 'nt' else 0
+        try:
+            res = subprocess.run([self.adb_bin, "devices"], capture_output=True, text=True,
+                                 timeout=1.5, stdin=subprocess.DEVNULL, creationflags=creationflags)
+            matches = []
+            for line in res.stdout.strip().splitlines():
+                line = line.strip()
+                if not line or line.startswith("List of"):
+                    continue
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == "device":
+                    matches.append(parts[0])
+
+            self.devices = {m: {"status": "device"} for m in matches}
+            emulator_devs = [m for m in matches if ("127.0.0.1" in m or "emulator" in m or "localhost" in m)]
+            if emulator_devs:
+                return emulator_devs[0]
+            if matches:
+                return matches[0]
+        except Exception:
+            pass
         return None
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# REST API ENDPOINTS
-# ─────────────────────────────────────────────────────────────────────────────
-
-@app.route('/', methods=['GET'])
-def root_status():
-    return jsonify({
-        "app": "MLBB Companion Suite",
-        "status": "online",
-        "version": "2.0",
-        "matchers": [
-            "PhaseMatcher", "BanMatcher", "AllyPickMatcher", "EnemyPickMatcher"
-        ],
-        "endpoints": [
-            "/status", "/checker/ping", "/cv/initialize",
-            "/cv/draft-scan", "/api/analyze_frame", "/api/reload_db", "/launch"
-        ]
-    })
-
-
-@app.route('/status', methods=['GET'])
-def get_system_status():
-    """Live telemetry endpoint polled by extension popup & background worker (<1ms response)."""
-    bs_running, port = is_bluestacks_process_running()
-    if not bs_running:
-        return jsonify({
-            "status": "online",
-            "bluestacks": False,
-            "gameRunning": False,
-            "connected": False,
-            "gamePhase": "Standby",
-            "subPhase": None,
-            "device": f"127.0.0.1:{port}",
-            "timestamp": time.time()
-        })
-
-    adb = get_adb_connector()
-    phase_info = adb.detect_game_phase_detailed()
-    phase_name = phase_info.get("phase", "Standby")
-    game_running = (phase_name not in ["N/A", "Standby", "Unknown", None]) or adb.is_game_running() or adb._ping_game_process()
-
-    return jsonify({
-        "status": "online",
-        "bluestacks": True,
-        "gameRunning": game_running,
-        "connected": True,
-        "gamePhase": phase_name,
-        "subPhase": phase_info.get("sub_phase"),
-        "device": adb.last_device or f"127.0.0.1:{port}",
-        "timestamp": time.time()
-    })
-
-
-@app.route('/checker/ping', methods=['GET'])
-def api_ping():
-    """Integrity handshake endpoint for Checker page."""
-    return jsonify({
-        "status": "online",
-        "message": "Core infrastructure functional (OpenCV & ADB Bridge Active).",
-        "timestamp": time.time()
-    })
-
-
-@app.route('/cv/initialize', methods=['GET'])
-def init_backend():
-    """Pre-warms CV tensors and responds with template count."""
-    return jsonify({
-        "status": "ready",
-        "message": "4 High-Precision Matchers synchronized.",
-        "templates": {
-            "bans": len(global_ban_matcher.ban_hero_names),
-            "picks": len(global_ally_pick_matcher.pick_hero_names),
-            "ally_picks": len(global_ally_pick_matcher.pick_hero_names),
-            "enemy_picks": len(global_enemy_pick_matcher.pick_hero_names)
-        }
-    })
-
-
-@app.route('/cv/draft-scan', methods=['GET'])
-def process_draft_ui():
-    """
-    Live 10-slot draft scan executing the 4 separate matchers directly:
-    1. PhaseMatcher    -> Detects current phase & sub-phase
-    2. BanMatcher      -> Matches 10 ban slots (5 ally + 5 enemy)
-    3. AllyPickMatcher -> Matches 5 ally pick cards
-    4. EnemyPickMatcher-> Matches 5 enemy pick cards
-    """
-    t0 = time.perf_counter()
-    frame = capture_target_window()
-    if frame is None:
-        return jsonify({
-            "status": "standby",
-            "message": "No active BlueStacks window or ADB stream found.",
-            "blue_slots": ["Empty"] * 5,
-            "red_slots": ["Empty"] * 5,
-            "blue_bans": ["Empty"] * 5,
-            "red_bans": ["Empty"] * 5
-        })
-
-    # 1. Phase Classification
-    phase_res = global_phase_matcher.match_phase(frame)
-    current_phase = phase_res.get("phase", "Standby")
-
-    if current_phase != "Draft Pick":
-        return jsonify({
-            "status": "standby",
-            "phase": current_phase,
-            "subPhase": phase_res.get("sub_phase"),
-            "confidence": phase_res.get("confidence", 0.0),
-            "blue_slots": ["Empty"] * 5,
-            "red_slots": ["Empty"] * 5,
-            "blue_bans": ["Empty"] * 5,
-            "red_bans": ["Empty"] * 5,
-            "message": f"Game is currently in {current_phase} phase (Draft Pick inactive)."
-        })
-
-    # 2. Extract Memory ROIs via Dedicated Specific Area Functions
-    t_ext_start = time.perf_counter()
-    ban_rois = extract_ban_regions(frame, global_analyzer)
-    ally_pick_rois = extract_ally_pick_regions(frame, global_analyzer)
-    enemy_pick_rois = extract_enemy_pick_regions(frame, global_analyzer)
-    pick_rois = ally_pick_rois + enemy_pick_rois
-    t_ext = (time.perf_counter() - t_ext_start) * 1000.0
-
-    # 3. Ban Matcher (10 circular slots)
-    ban_thresh = float(global_analyzer.thresholds.get("ban_threshold", 0.60))
-    debug_bans, t_ban = global_ban_matcher.match_bans(ban_rois, threshold=ban_thresh, top_k=5)
-    banned_heroes: Set[str] = set()
-    for b in debug_bans:
-        h = b.get("matched_hero")
-        if h:
-            banned_heroes.add(h.lower())
-
-    # 4. Ally Pick Matcher (Slots 0..4) — One-Shot 4-Head Model
-    pick_thresh = float(global_analyzer.thresholds.get("pick_threshold", 0.50))
-    ally_picks, t_ally, debug_ally_picks = global_ally_pick_matcher.match_picks(
-        ally_pick_rois, taken_bans=banned_heroes, threshold=pick_thresh, top_k=5
-    )
-
-    # 5. Enemy Pick Matcher (Slots 0..4) — Mirrored One-Shot 4-Head Model
-    enemy_picks, t_enemy, debug_enemy_picks = global_enemy_pick_matcher.match_picks(
-        enemy_pick_rois, taken_bans=banned_heroes, threshold=pick_thresh, top_k=5
-    )
-
-    debug_picks = debug_ally_picks + debug_enemy_picks
-    blue_bans = [(b.get("matched_hero") or "Empty") for b in debug_bans[:5]]
-    red_bans = [(b.get("matched_hero") or "Empty") for b in debug_bans[5:10]]
-
-    blue_slots = [(p.get("matched_hero") or "Empty") for p in ally_picks]
-    red_slots = [(p.get("matched_hero") or "Empty") for p in enemy_picks]
-
-    total_ms = (time.perf_counter() - t0) * 1000.0
-
-    timings_payload = {
-        "extraction_ms": round(t_ext, 2),
-        "ban_inference_ms": round(t_ban, 2),
-        "pick_inference_ms": round(t_ally + t_enemy, 2),
-        "ally_pick_ms": round(t_ally, 2),
-        "enemy_pick_ms": round(t_enemy, 2),
-        "total_ms": round(total_ms, 2)
-    }
-
-    return jsonify({
-        "status": "active",
-        "phase": current_phase,
-        "subPhase": phase_res.get("sub_phase"),
-        "confidence": phase_res.get("confidence", 0.95),
-        "blue_slots": blue_slots,
-        "red_slots": red_slots,
-        "blue_bans": blue_bans,
-        "red_bans": red_bans,
-        "timings": timings_payload,
-        "pipeline_timings_ms": timings_payload,
-        "debug_bans_array": debug_bans,
-        "debug_ally_picks_array": debug_ally_picks,
-        "debug_enemy_picks_array": debug_enemy_picks,
-        "debug_picks_array": debug_picks
-    })
-
-
-@app.route('/api/analyze_frame', methods=['POST'])
-def analyze_frame_api():
-    """
-    High-precision frame analysis endpoint executing the 4 separate matchers directly
-    for Checker dropzone & diagnostic test images.
-    """
-    try:
-        t0 = time.perf_counter()
-        data = request.get_json(force=True, silent=True) or {}
-        raw_b64 = data.get("image_base64") or data.get("image") or ""
-
-        # Fallback to live screen capture if no image is passed
-        if not raw_b64:
-            frame = capture_target_window()
-            if frame is None:
-                return jsonify({"success": False, "error": "No image provided and no active window to capture."}), 400
-        else:
-            if "," in raw_b64:
-                raw_b64 = raw_b64.split(",", 1)[1]
-            img_bytes = base64.b64decode(raw_b64)
-            nparr = np.frombuffer(img_bytes, np.uint8)
-            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            if frame is None or frame.size == 0:
-                return jsonify({"success": False, "error": "Failed to decode image data."}), 400
-
-        # 1. Phase Matcher
-        phase_res = global_phase_matcher.match_phase(frame)
-
-        # 2. Extract Memory ROIs via Dedicated Specific Area Functions
-        t_ext_start = time.perf_counter()
-        ban_rois = extract_ban_regions(frame, global_analyzer)
-        ally_pick_rois = extract_ally_pick_regions(frame, global_analyzer)
-        enemy_pick_rois = extract_enemy_pick_regions(frame, global_analyzer)
-        pick_rois = ally_pick_rois + enemy_pick_rois
-        t_ext = (time.perf_counter() - t_ext_start) * 1000.0
-
-        # 3. Ban Matcher
-        ban_thresh = float(global_analyzer.thresholds.get("ban_threshold", 0.60))
-        debug_bans, t_ban = global_ban_matcher.match_bans(ban_rois, threshold=ban_thresh, top_k=5)
-        banned_heroes: Set[str] = set()
-        for b in debug_bans:
-            h = b.get("matched_hero")
-            if h:
-                banned_heroes.add(h.lower())
-
-        # 4. Ally Pick Matcher — One-Shot 4-Head Model
-        pick_thresh = float(global_analyzer.thresholds.get("pick_threshold", 0.50))
-        ally_picks, t_ally, debug_ally_picks = global_ally_pick_matcher.match_picks(
-            ally_pick_rois, taken_bans=banned_heroes, threshold=pick_thresh, top_k=5
-        )
-
-        # 5. Enemy Pick Matcher — Mirrored One-Shot 4-Head Model
-        enemy_picks, t_enemy, debug_enemy_picks = global_enemy_pick_matcher.match_picks(
-            enemy_pick_rois, taken_bans=banned_heroes, threshold=pick_thresh, top_k=5
-        )
-
-        debug_picks = debug_ally_picks + debug_enemy_picks
-
-        def crop_to_b64(crop):
-            if crop is None or crop.size == 0:
-                return None
-            _, buf = cv2.imencode('.png', crop)
-            return 'data:image/png;base64,' + base64.b64encode(buf).decode('utf-8')
-
-        bans_payload = [
-            {
-                "slot": i,
-                "side": "ally" if i < 5 else "enemy",
-                "hero": db.get("matched_hero"),
-                "confidence": round(float(db.get("confidence", 0.0)), 3),
-                "shape": "round",
-                "crop_thumb": crop_to_b64(ban_rois[i]["crop"]) if i < len(ban_rois) else None,
-                "rejection_reason": db.get("rejection_reason"),
-                "top_k_candidates": db.get("top_k_candidates", []),
-                "empty_similarity": db.get("empty_similarity", 0.0)
-            }
-            for i, db in enumerate(debug_bans)
-        ]
-
-        picks_payload = [
-            {
-                "slot": i,
-                "side": "ally" if i < 5 else "enemy",
-                "hero": dp.get("matched_hero"),
-                "lane": dp.get("detected_lane"),
-                "confidence": round(float(dp.get("confidence", 0.0)), 3),
-                "shape": "rectangle",
-                "crop_thumb": crop_to_b64(pick_rois[i]["crop"]) if i < len(pick_rois) else None,
-                "edge_density": dp.get("edge_density", 0.0),
-                "rejection_reason": dp.get("rejection_reason"),
-                "top_k_candidates": dp.get("top_k_candidates", []),
-                "empty_similarity": dp.get("empty_similarity", 0.0)
-            }
-            for i, dp in enumerate(debug_picks)
-        ]
-
-        total_ms = (time.perf_counter() - t0) * 1000.0
-
-        timings_payload = {
-            "extraction_ms": round(t_ext, 2),
-            "ban_inference_ms": round(t_ban, 2),
-            "pick_inference_ms": round(t_ally + t_enemy, 2),
-            "ally_pick_ms": round(t_ally, 2),
-            "enemy_pick_ms": round(t_enemy, 2),
-            "total_ms": round(total_ms, 2)
-        }
-
-        return jsonify({
-            "success": True,
-            "phase": phase_res["phase"],
-            "subPhase": phase_res.get("sub_phase"),
-            "confidence": round(float(phase_res["confidence"]), 2),
-            "details": phase_res.get("details", ""),
-            "bans": bans_payload,
-            "picks": picks_payload,
-            "debug_bans_array": debug_bans,
-            "debug_ally_picks_array": debug_ally_picks,
-            "debug_enemy_picks_array": debug_enemy_picks,
-            "debug_picks_array": debug_picks,
-            "pipeline_timings_ms": timings_payload,
-            "timings": timings_payload
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/reload_db', methods=['GET'])
-def reload_database():
-    """Hot-reloads hero textures across all 4 matchers and resets GPU / RAM caches."""
-    try:
-        global_ban_matcher._load_banks()
-        global_ally_pick_matcher._load_banks()
-        global_enemy_pick_matcher._load_banks()
-        global_gpu_cache.reload()
-        return jsonify({
-            "success": True,
-            "reloaded": True,
-            "counts": {
-                "bans": len(global_ban_matcher.ban_hero_names),
-                "ally_picks": len(global_ally_pick_matcher.pick_hero_names),
-                "enemy_picks": len(global_enemy_pick_matcher.pick_hero_names)
-            }
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/save_rois', methods=['POST'])
-def save_rois_endpoint():
-    """Saves custom user-calibrated ROI dimensions and thresholds to rois_config.json."""
-    try:
-        payload = request.get_json(force=True, silent=True) or {}
-        new_rois = payload.get("rois", {})
-        new_thresholds = payload.get("thresholds", {})
-        raw_pixel_spec = payload.get("raw_pixel_spec", {})
-        if new_rois:
-            global_analyzer.rois.update(new_rois)
-        if new_thresholds:
-            global_analyzer.thresholds.update(new_thresholds)
-        if raw_pixel_spec:
-            global_analyzer.raw_pixel_spec = raw_pixel_spec
-        global_analyzer.save_config()
-        
-        # Immediately re-calibrate template & crop matching windows
-        global_ally_pick_matcher.update_calibration(global_analyzer)
-        global_enemy_pick_matcher.update_calibration(global_analyzer)
-        
-        return jsonify({
-            "success": True,
-            "message": "Calibration dimensions saved and applied successfully.",
-            "rois": global_analyzer.rois,
-            "raw_pixel_spec": getattr(global_analyzer, "raw_pixel_spec", {}),
-            "thresholds": global_analyzer.thresholds
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/api/get_rois', methods=['GET'])
-def get_rois_endpoint():
-    """Returns current active ROI dimensions and thresholds."""
-    return jsonify({
-        "success": True,
-        "rois": global_analyzer.rois,
-        "raw_pixel_spec": getattr(global_analyzer, "raw_pixel_spec", {}),
-        "thresholds": global_analyzer.thresholds
-    })
-
-
-@app.route('/api/reset_rois', methods=['POST'])
-def reset_rois_endpoint():
-    """Resets in-memory ROIs and rois_config.json to official MLBB default spec."""
-    try:
-        from roi import DEFAULT_ROIS
-        global_analyzer.rois = dict(DEFAULT_ROIS)
-        if hasattr(global_analyzer, "raw_pixel_spec"):
-            delattr(global_analyzer, "raw_pixel_spec")
-        global_analyzer.save_config()
-        
-        # Immediately restore matchers to default calibration
-        global_ally_pick_matcher.update_calibration(global_analyzer)
-        global_enemy_pick_matcher.update_calibration(global_analyzer)
-        
-        return jsonify({
-            "success": True,
-            "message": "Calibration dimensions reset to MLBB default spec successfully.",
-            "rois": global_analyzer.rois,
-            "thresholds": global_analyzer.thresholds
-        })
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route('/launch', methods=['GET'])
-def launch_game_and_emulator():
-    """Invokes BlueStacks 5 / Multi-Instance Manager with visible interactive window (SW_SHOWNORMAL)."""
-    import ctypes
-    
-    # Auto-discover active instance from bluestacks.conf
-    discovered = get_bluestacks_ports_from_config()
-    instance_name = list(discovered.keys())[0] if discovered else "Nougat32"
-
-    bs_player = r"C:\Program Files\BlueStacks_nxt\HD-Player.exe"
-    bs_manager = r"C:\Program Files\BlueStacks_nxt\HD-MultiInstanceManager.exe"
-
-    if os.path.exists(bs_player):
+    def _attempt_connect(self, device_str: str) -> bool:
+        creationflags = 0x08000000 if os.name == 'nt' else 0
         try:
-            # ShellExecuteW with SW_SHOWNORMAL (1) forces normal visible window on the active desktop
-            ctypes.windll.shell32.ShellExecuteW(
-                None, "open", bs_player, f"--instance {instance_name} --package com.mobile.legends", None, 1
-            )
-            return jsonify({
-                "status": "success",
-                "message": f"Launched BlueStacks ({instance_name}) visibly: {bs_player}",
-                "instance": instance_name
-            })
-        except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 500
+            res = subprocess.run([self.adb_bin, "connect", device_str],
+                                 capture_output=True, text=True, timeout=1.5,
+                                 stdin=subprocess.DEVNULL, creationflags=creationflags)
+            out = res.stdout.lower()
+            return "connected" in out or "already connected" in out
+        except Exception:
+            return False
 
-    if os.path.exists(bs_manager):
-        try:
-            ctypes.windll.shell32.ShellExecuteW(None, "open", bs_manager, "", None, 1)
-            return jsonify({
-                "status": "success",
-                "message": f"Launched BlueStacks Multi-Instance Manager: {bs_manager}",
-                "instance": instance_name
-            })
-        except Exception as e:
-            return jsonify({"status": "error", "message": str(e)}), 500
-
-    return jsonify({"status": "notice", "message": "BlueStacks executable not found in default paths. Please open manually."})
-
-
-@app.route('/api/close-bluestacks', methods=['POST', 'GET'])
-def close_bluestacks_instance():
-    """Closes BlueStacks emulator instance while keeping the Flask API server alive."""
-    k1 = kill_by_process_name("HD-Player.exe", "BlueStacks Player")
-    k2 = kill_by_process_name("HD-Adb.exe", "BlueStacks ADB Subsystem")
-    k3 = kill_by_process_name("BstkSVC.exe", "BlueStacks Service")
-    k4 = kill_by_process_name("HD-MultiInstanceManager.exe", "BlueStacks Multi-Instance Manager")
-    return jsonify({
-        "status": "stopped",
-        "message": "BlueStacks instance closed successfully.",
-        "processes_killed": k1 + k2 + k3 + k4
-    })
-
-
-@app.route('/shutdown', methods=['POST', 'GET'])
-@app.route('/api/e-stop', methods=['POST', 'GET'])
-def emergency_stop():
-    """
-    Emergency Stop (E-STOP): Gracefully terminates BlueStacks 5 emulator
-    (HD-Player, HD-Adb, BstkSVC), frees all memory/VRAM, and shuts down the Flask server.
-    """
-    import threading
-
-    def perform_shutdown():
-        time.sleep(0.5)
-        close_everything(close_emulator=True)
-        os._exit(0)
-
-    threading.Thread(target=perform_shutdown, daemon=True).start()
-
-    return jsonify({
-        "status": "stopped",
-        "message": "Emergency Stop Triggered. BlueStacks and Backend shutting down..."
-    })
+    def _ping_device(self) -> bool:
+        """Fast ADB get-state ping check."""
+        # ... (rest of the method)

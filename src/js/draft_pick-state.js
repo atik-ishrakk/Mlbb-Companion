@@ -1,6 +1,6 @@
 /**
  * MLBB Companion — Draft Pick State Manager (draft-state.js)
- * Modular Single-Source-of-Truth for Picks, Bans, Equipment, and Persistence.
+ * Modular Single-Source-of-Truth for Picks, Bans, Spells, Equipment, and Persistence.
  */
 (function () {
   'use strict';
@@ -8,12 +8,37 @@
   const LS_KEY = 'MLBB_Brave_DraftState';
   const listeners = [];
 
+  const DEFAULT_SPELLS_BY_LANE = [
+    'vengeance',    // Slot 0: EXP Lane
+    'retribution',  // Slot 1: Jungle
+    'flicker',      // Slot 2: Mid Lane
+    'inspire',      // Slot 3: Gold Lane
+    'flicker'       // Slot 4: Roam
+  ];
+
+  const SPELL_META = {
+    flicker: { id: 'flicker', name: 'Flicker', icon: '⚡', color: '#38bdf8', cd: '120s' },
+    retribution: { id: 'retribution', name: 'Retribution', icon: '🗡️', color: '#f59e0b', cd: '35s' },
+    purify: { id: 'purify', name: 'Purify', icon: '🛡️', color: '#34d399', cd: '90s' },
+    inspire: { id: 'inspire', name: 'Inspire', icon: '🏹', color: '#facc15', cd: '75s' },
+    vengeance: { id: 'vengeance', name: 'Vengeance', icon: '🌀', color: '#fb923c', cd: '75s' },
+    execute: { id: 'execute', name: 'Execute', icon: '⚔️', color: '#ef4444', cd: '90s' },
+    aegis: { id: 'aegis', name: 'Aegis', icon: '🔰', color: '#60a5fa', cd: '90s' },
+    revitalize: { id: 'revitalize', name: 'Revitalize', icon: '🌿', color: '#10b981', cd: '100s' },
+    sprint: { id: 'sprint', name: 'Sprint', icon: '👟', color: '#38bdf8', cd: '100s' },
+    petrify: { id: 'petrify', name: 'Petrify', icon: '🗿', color: '#a855f7', cd: '90s' },
+    flameshot: { id: 'flameshot', name: 'Flameshot', icon: '🔥', color: '#f97316', cd: '50s' },
+    arrival: { id: 'arrival', name: 'Arrival', cooldown: '75s', icon: '🚪', color: '#c084fc', cd: '75s' }
+  };
+
   const state = {
     maxBans: 5,
     allyTeam: new Array(5).fill(null),
     enemyTeam: new Array(5).fill(null),
     allyBans: new Array(5).fill(null),
     enemyBans: new Array(5).fill(null),
+    allySpells: [...DEFAULT_SPELLS_BY_LANE],
+    enemySpells: [...DEFAULT_SPELLS_BY_LANE],
     allyEquipments: Array.from({ length: 5 }, () => new Array(6).fill(null)),
     enemyEquipments: Array.from({ length: 5 }, () => new Array(6).fill(null)),
     activeSelection: { side: null, index: null, type: null, equipIndex: null }
@@ -25,6 +50,22 @@
 
   function getItemsDb() {
     return window.MLBBData?.items || [];
+  }
+
+  function getSpellsDb() {
+    return window.MLBBData?.spells || Object.values(SPELL_META);
+  }
+
+  function resolveSpellInfo(spellId) {
+    if (!spellId) return null;
+    return SPELL_META[spellId] || { id: spellId, name: spellId, icon: '✨', color: '#38bdf8', cd: '75s' };
+  }
+
+  function resolveSpellAvatar(spell) {
+    if (!spell) return '../assets/img/placeholder.svg';
+    const id = typeof spell === 'string' ? spell : spell.id;
+    if (id) return `../assets/spells/${id}.png`;
+    return '../assets/img/placeholder.svg';
   }
 
   function resolveHeroAvatar(hero) {
@@ -49,43 +90,33 @@
     const items = getItemsDb();
     const getItem = (id) => items.find((it) => it.id === id) || { id, name: id.replace(/_/g, ' ') };
 
-    const r = (hero.role || '').toLowerCase();
-    let buildIds = [];
-    if (r.includes('marksman')) {
-      buildIds = ['swift_boots', 'corrosion_scythe', 'demon_hunter_sword', 'golden_staff', 'wind_of_nature', 'blade_of_despair'];
-    } else if (r.includes('mage')) {
-      buildIds = ['arcane_boots', 'genius_wand', 'lightning_truncheon', 'holy_crystal', 'divine_glaive', 'blood_wings'];
-    } else if (r.includes('assassin')) {
-      buildIds = ['magic_shoes', 'blade_of_the_heptaseas', 'hunter_strike', 'malefic_roar', 'endless_battle', 'immortality'];
-    } else if (r.includes('fighter')) {
-      buildIds = ['warrior_boots', 'war_axe', 'brute_force_breastplate', 'endless_battle', 'athena_shield', 'immortality'];
-    } else if (r.includes('tank')) {
-      buildIds = ['tough_boots', 'dominance_ice', 'athena_shield', 'antique_cuirass', 'blade_armor', 'immortality'];
-    } else if (r.includes('support')) {
-      buildIds = ['magic_shoes', 'flaskoftheoasis', 'dominance_ice', 'oracle', 'athena_shield', 'immortality'];
+    const role = (hero.role || '').toLowerCase();
+    let defaultIds = [];
+
+    if (role.includes('marksman')) {
+      defaultIds = ['corrosion_scythe', 'demon_hunter_sword', 'golden_staff', 'windtalker', 'wind_of_nature', 'blade_of_despair'];
+    } else if (role.includes('mage')) {
+      defaultIds = ['demon_shoes', 'lightning_truncheon', 'genius_wand', 'holy_crystal', 'divine_glaive', 'blood_wings'];
+    } else if (role.includes('assassin')) {
+      defaultIds = ['magic_shoes', 'hunter_strike', 'blade_of_despair', 'endless_battle', 'malefic_roar', 'immortality'];
+    } else if (role.includes('tank')) {
+      defaultIds = ['tough_boots', 'dominance_ice', 'athenas_shield', 'blade_armor', 'antique_cuirass', 'immortality'];
+    } else if (role.includes('support')) {
+      defaultIds = ['demon_shoes', 'flask_of_the_oasis', 'fleeting_time', 'dominance_ice', 'athenas_shield', 'immortality'];
     } else {
-      buildIds = ['warrior_boots', 'endless_battle', 'blade_of_despair', 'athena_shield', 'antique_cuirass', 'immortality'];
+      defaultIds = ['warrior_boots', 'war_axe', 'brute_force_breastplate', 'hunter_strike', 'malefic_roar', 'immortality'];
     }
-    return buildIds.map(getItem);
-  }
 
-  function notify() {
-    save();
-    listeners.forEach((fn) => {
-      try { fn(state); } catch (e) { console.error('DraftState listener error:', e); }
-    });
-  }
-
-  function subscribe(fn) {
-    if (typeof fn === 'function') listeners.push(fn);
+    return defaultIds.map(getItem);
   }
 
   function setBanCount(count) {
+    if (![3, 4, 5].includes(count)) return;
     state.maxBans = count;
-    while (state.allyBans.length < state.maxBans) state.allyBans.push(null);
-    while (state.allyBans.length > state.maxBans) state.allyBans.pop();
-    while (state.enemyBans.length < state.maxBans) state.enemyBans.push(null);
-    while (state.enemyBans.length > state.maxBans) state.enemyBans.pop();
+    state.allyBans = state.allyBans.slice(0, count);
+    while (state.allyBans.length < count) state.allyBans.push(null);
+    state.enemyBans = state.enemyBans.slice(0, count);
+    while (state.enemyBans.length < count) state.enemyBans.push(null);
     notify();
   }
 
@@ -169,6 +200,25 @@
     notify();
   }
 
+  function selectSpell(spellId, side, slotIndex) {
+    if (side === 'ally') {
+      state.allySpells[slotIndex] = spellId;
+    } else {
+      state.enemySpells[slotIndex] = spellId;
+    }
+    notify();
+  }
+
+  function clearSpell(side, slotIndex) {
+    const def = DEFAULT_SPELLS_BY_LANE[slotIndex] || 'flicker';
+    if (side === 'ally') {
+      state.allySpells[slotIndex] = def;
+    } else {
+      state.enemySpells[slotIndex] = def;
+    }
+    notify();
+  }
+
   function setActiveSelection(sel) {
     state.activeSelection = sel || { side: null, index: null, type: null, equipIndex: null };
   }
@@ -178,6 +228,8 @@
     state.enemyTeam = new Array(5).fill(null);
     state.allyBans = new Array(state.maxBans).fill(null);
     state.enemyBans = new Array(state.maxBans).fill(null);
+    state.allySpells = [...DEFAULT_SPELLS_BY_LANE];
+    state.enemySpells = [...DEFAULT_SPELLS_BY_LANE];
     state.allyEquipments = Array.from({ length: 5 }, () => new Array(6).fill(null));
     state.enemyEquipments = Array.from({ length: 5 }, () => new Array(6).fill(null));
     state.activeSelection = { side: null, index: null, type: null, equipIndex: null };
@@ -192,6 +244,8 @@
         enemyTeam: state.enemyTeam.map((h) => h?.id || null),
         allyBans: state.allyBans.map((h) => h?.id || null),
         enemyBans: state.enemyBans.map((h) => h?.id || null),
+        allySpells: state.allySpells,
+        enemySpells: state.enemySpells,
         allyEquipments: state.allyEquipments.map((row) => row.map((it) => it?.id || null)),
         enemyEquipments: state.enemyEquipments.map((row) => row.map((it) => it?.id || null)),
       };
@@ -214,6 +268,8 @@
       if (Array.isArray(data.enemyTeam)) state.enemyTeam = data.enemyTeam.map(mapHero);
       if (Array.isArray(data.allyBans)) state.allyBans = data.allyBans.map(mapHero);
       if (Array.isArray(data.enemyBans)) state.enemyBans = data.enemyBans.map(mapHero);
+      if (Array.isArray(data.allySpells)) state.allySpells = data.allySpells;
+      if (Array.isArray(data.enemySpells)) state.enemySpells = data.enemySpells;
 
       if (Array.isArray(data.allyEquipments)) {
         state.allyEquipments = data.allyEquipments.map((row) => Array.isArray(row) ? row.map(mapItem) : new Array(6).fill(null));
@@ -224,10 +280,28 @@
     } catch {}
   }
 
+  function subscribe(fn) {
+    if (typeof fn === 'function') listeners.push(fn);
+  }
+
+  function notify() {
+    save();
+    listeners.forEach((fn) => {
+      try {
+        fn(state);
+      } catch (err) {
+        console.error('[DraftState] Listener error:', err);
+      }
+    });
+  }
+
   window.DraftState = {
     get: () => state,
     getHeroesDb,
     getItemsDb,
+    getSpellsDb,
+    resolveSpellInfo,
+    resolveSpellAvatar,
     resolveHeroAvatar,
     resolveItemAvatar,
     resolveRectAvatar,
@@ -239,6 +313,8 @@
     clearBan,
     selectEquipment,
     clearEquipment,
+    selectSpell,
+    clearSpell,
     setActiveSelection,
     reset,
     save,

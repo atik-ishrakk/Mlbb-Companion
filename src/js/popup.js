@@ -1,307 +1,973 @@
 /**
- * IMPORTANT:
- * popup.js is UI ONLY.
- * It does NOT:
- *   - launch BlueStacks
- *   - start/stop the server
- *   - navigate the active tab
- *   - control CV directly
- * All runtime control goes through service_worker.js.
- */
+
+* MLBB Companion — Popup Controller
+*
+* IMPORTANT:
+* This file is UI ONLY.
+*
+* All actual system operations are delegated to service_worker.js.
+  */
 
 (function () {
+
   'use strict';
 
-  const popGamePhase = document.getElementById('popGamePhase');
-  const popPortLink = document.getElementById('popPortLink');
-  const btnOpenBrowser = document.getElementById('btnOpenBrowser');
+  // ===========================================================================
+  // DOM
+  // ===========================================================================
 
-  const moduleBs = document.getElementById('moduleBs');
-  const moduleCv = document.getElementById('moduleCv');
-  const moduleServer = document.getElementById('moduleServer');
+  const popGamePhase =
+    document.getElementById('popGamePhase');
 
-  const bsInstanceToggle = document.getElementById('bsInstanceToggle');
-  const cvAutoSyncToggle = document.getElementById('cvAutoSyncToggle');
-  const serverPowerToggle = document.getElementById('serverPowerToggle');
+  const popPortLink =
+    document.getElementById('popPortLink');
 
-  const bsToggleDesc = document.getElementById('bsToggleDesc');
-  const serverToggleDesc = document.getElementById('serverToggleDesc');
+  const btnOpenBrowser =
+    document.getElementById('btnOpenBrowser');
 
-  let isStoppingBs = false;
-  let isStoppingServer = false;
-  let isPolling = false;
+  const moduleBs =
+    document.getElementById('moduleBs');
+
+  const moduleCv =
+    document.getElementById('moduleCv');
+
+  const moduleServer =
+    document.getElementById('moduleServer');
+
+  const bsInstanceToggle =
+    document.getElementById('bsInstanceToggle');
+
+  const cvAutoSyncToggle =
+    document.getElementById('cvAutoSyncToggle');
+
+  const serverPowerToggle =
+    document.getElementById('serverPowerToggle');
+
+  const bsToggleDesc =
+    document.getElementById('bsToggleDesc');
+
+  const serverToggleDesc =
+    document.getElementById('serverToggleDesc');
+
+  // ===========================================================================
+  // STATE
+  // ===========================================================================
+
+  let polling = false;
+
   let consecutiveFailures = 0;
-  const MAX_CONSECUTIVE_FAILURES = 3;
 
-  function init() {
-    loadCvAutoSyncState();
-    pollStatus();
-    setInterval(pollStatus, 500);
+  const MAX_FAILURES = 3;
 
-    if (btnOpenBrowser) {
-      btnOpenBrowser.addEventListener('click', () => {
-        openPage('src/html/draft_pick.html');
+  let lastPhase = null;
+
+  let busy = {
+    bluestacks: false,
+    server: false,
+    cv: false
+  };
+
+  // ===========================================================================
+  // INIT
+  // ===========================================================================
+
+  document.addEventListener(
+    'DOMContentLoaded',
+    init
+  );
+
+  async function init() {
+
+    ```
+setupEvents();
+
+await loadCvPreference();
+
+await pollStatus();
+
+/*
+ * 1.2 seconds is enough for a popup.
+ *
+ * The previous implementation used 500ms.
+ * That produced unnecessary HTTP traffic.
+ */
+setInterval(
+  pollStatus,
+  1200
+);
+```
+
+  }
+
+  // ===========================================================================
+  // EVENTS
+  // ===========================================================================
+
+  function setupEvents() {
+
+    ```
+if (btnOpenBrowser) {
+
+  btnOpenBrowser.addEventListener(
+    'click',
+    () => {
+
+      sendMessage({
+        action: 'OPEN_PAGE',
+        page: 'src/html/draft_pick.html'
+      });
+
+    }
+  );
+}
+
+
+if (popPortLink) {
+
+  popPortLink.addEventListener(
+    'click',
+    (event) => {
+
+      event.preventDefault();
+
+      sendMessage({
+        action: 'OPEN_URL',
+        url: 'http://127.0.0.1:5000/status'
+      });
+
+    }
+  );
+}
+
+
+if (bsInstanceToggle) {
+
+  bsInstanceToggle.addEventListener(
+    'change',
+    () => {
+
+      const enabled =
+        bsInstanceToggle.checked;
+
+      setBusy(
+        'bluestacks',
+        true
+      );
+
+      updateBlueStacksVisualState(
+        enabled
+          ? 'STARTING'
+          : 'STOPPING'
+      );
+
+      sendMessage({
+        action: 'SET_BLUESTACKS',
+        enabled
+      }).then(() => {
+
+        /*
+         * Do not immediately force the switch to ON/OFF.
+         *
+         * pollStatus() will confirm the real process state.
+         */
+
+      }).finally(() => {
+
+        setBusy(
+          'bluestacks',
+          false
+        );
+
       });
     }
+  );
+}
 
-    if (popPortLink) {
-      popPortLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        openPage('http://127.0.0.1:5000/status');
+
+if (cvAutoSyncToggle) {
+
+  cvAutoSyncToggle.addEventListener(
+    'change',
+    () => {
+
+      const enabled =
+        cvAutoSyncToggle.checked;
+
+      setBusy(
+        'cv',
+        true
+      );
+
+      updateCvVisualState(enabled);
+
+      sendMessage({
+        action: 'SET_CV',
+        enabled
+      }).finally(() => {
+
+        setBusy(
+          'cv',
+          false
+        );
+
       });
     }
+  );
+}
 
-    if (bsInstanceToggle) {
-      bsInstanceToggle.addEventListener('change', handleBsToggle);
-    }
 
-    if (cvAutoSyncToggle) {
-      cvAutoSyncToggle.addEventListener('change', handleCvToggle);
-    }
+if (serverPowerToggle) {
 
-    if (serverPowerToggle) {
-      serverPowerToggle.addEventListener('change', handleServerToggle);
-    }
-  }
+  serverPowerToggle.addEventListener(
+    'change',
+    () => {
 
-  // 1. SWITCH 1: BlueStacks 5 Emulator Instance
-  function handleBsToggle() {
-    const isBsOn = bsInstanceToggle ? bsInstanceToggle.checked : false;
+      const enabled =
+        serverPowerToggle.checked;
 
-    if (isBsOn) {
-      isStoppingBs = false;
-      if (moduleBs) moduleBs.classList.add('is-active');
-      if (bsToggleDesc) {
-        bsToggleDesc.innerText = 'Launching...';
-      }
+      setBusy(
+        'server',
+        true
+      );
 
-      const link = document.createElement('a');
-      link.href = 'bluestacks://launch?instance=Nougat32&package=com.mobile.legends';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      updateServerVisualState(
+        enabled
+          ? 'STARTING'
+          : 'STOPPING'
+      );
 
-      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({ action: 'TRIGGER_LAUNCH' });
-      }
-      fetch('http://127.0.0.1:5000/launch').catch(() => {});
+      sendMessage({
+        action: 'SET_SERVER',
+        enabled
+      }).finally(() => {
 
-      setTimeout(() => {
-        pollStatus();
-      }, 2000);
-    } else {
-      isStoppingBs = true;
-      if (moduleBs) moduleBs.classList.remove('is-active');
-      if (bsToggleDesc) {
-        bsToggleDesc.innerText = 'Closing...';
-      }
+        setBusy(
+          'server',
+          false
+        );
 
-      fetch('http://127.0.0.1:5000/api/close-bluestacks', { method: 'POST' })
-        .catch(() => {})
-        .finally(() => {
-          setTimeout(() => {
-            isStoppingBs = false;
-            if (bsToggleDesc) bsToggleDesc.innerText = 'Closed';
-          }, 1200);
-        });
-    }
-  }
-
-  // 2. SWITCH 2: Live Computer Vision & Auto-Sync (No subtitle hint)
-  function handleCvToggle() {
-    const isCvOn = cvAutoSyncToggle ? cvAutoSyncToggle.checked : false;
-
-    if (moduleCv) {
-      if (isCvOn) moduleCv.classList.add('is-active');
-      else moduleCv.classList.remove('is-active');
-    }
-
-    try {
-      localStorage.setItem('MLBB_CV_AutoSync', isCvOn ? 'true' : 'false');
-    } catch {}
-
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.set({ MLBB_CV_AutoSync: isCvOn });
-    }
-  }
-
-  function loadCvAutoSyncState() {
-    try {
-      const saved = localStorage.getItem('MLBB_CV_AutoSync');
-      const isCvOn = saved !== 'false';
-      if (cvAutoSyncToggle) {
-        cvAutoSyncToggle.checked = isCvOn;
-        handleCvToggle();
-      }
-    } catch {}
-
-    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      chrome.storage.local.get(['MLBB_CV_AutoSync'], (res) => {
-        if (res && typeof res.MLBB_CV_AutoSync === 'boolean' && cvAutoSyncToggle) {
-          cvAutoSyncToggle.checked = res.MLBB_CV_AutoSync;
-          handleCvToggle();
-        }
       });
     }
+  );
+}
+```
+
   }
 
-  // 3. SWITCH 3: Backend API Server Power
-  function handleServerToggle() {
-    const isServerOn = serverPowerToggle ? serverPowerToggle.checked : false;
+  // ===========================================================================
+  // CV PREFERENCE
+  // ===========================================================================
 
-    if (isServerOn) {
-      isStoppingServer = false;
-      if (moduleServer) moduleServer.classList.add('is-active');
-      if (serverToggleDesc) {
-        serverToggleDesc.innerHTML = 'Starting Server (Port 5000)...';
-      }
+  async function loadCvPreference() {
 
-      // Trigger native protocol handler to start Python server silently in background
-      const link = document.createElement('a');
-      link.href = 'mlbb://start-server';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    ```
+try {
 
-      // Poll every 800ms for 5 attempts to catch server coming online
-      let attempts = 0;
-      const pollTimer = setInterval(() => {
-        attempts++;
-        fetch('http://127.0.0.1:5000/status')
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.status === 'online') {
-              clearInterval(pollTimer);
-              pollStatus();
-            }
-          })
-          .catch(() => {
-            if (attempts >= 6) clearInterval(pollTimer);
-          });
-      }, 800);
-    } else {
-      isStoppingServer = true;
-      if (moduleServer) moduleServer.classList.remove('is-active');
-      if (serverToggleDesc) {
-        serverToggleDesc.innerHTML = 'Server Stopped / Offline';
-      }
-      if (btnOpenBrowser) {
-        btnOpenBrowser.className = 'btn-header-browser status-offline';
-      }
+  const result =
+    await chrome.storage.local.get(
+      ['MLBB_CV_AutoSync']
+    );
 
-      fetch('http://127.0.0.1:5000/shutdown', { method: 'POST' })
-        .catch(() => {})
-        .finally(() => {
-          setTimeout(() => {
-            isStoppingServer = false;
-          }, 2000);
-        });
+  const enabled =
+    typeof result.MLBB_CV_AutoSync === 'boolean'
+      ? result.MLBB_CV_AutoSync
+      : true;
+
+  if (cvAutoSyncToggle) {
+
+    cvAutoSyncToggle.checked =
+      enabled;
+  }
+
+  updateCvVisualState(enabled);
+
+} catch (error) {
+
+  console.error(
+    '[MLBB Popup] Failed to load CV preference:',
+    error
+  );
+
+}
+```
+
+  }
+
+  // ===========================================================================
+  // STATUS POLLING
+  // ===========================================================================
+
+  async function pollStatus() {
+
+    ```
+if (polling) {
+  return;
+}
+
+polling = true;
+
+try {
+
+  const response =
+    await sendMessage({
+      action: 'GET_STATUS'
+    });
+
+  if (!response?.success) {
+    throw new Error(
+      response?.error ||
+      'Status request failed.'
+    );
+  }
+
+  consecutiveFailures = 0;
+
+  applyStatus(
+    response.data,
+    response.controller
+  );
+
+} catch (error) {
+
+  consecutiveFailures++;
+
+  if (
+    consecutiveFailures >=
+    MAX_FAILURES
+  ) {
+
+    applyOfflineState();
+  }
+
+} finally {
+
+  polling = false;
+}
+```
+
+  }
+
+  // ===========================================================================
+  // APPLY BACKEND STATUS
+  // ===========================================================================
+
+  function applyStatus(
+    data,
+    controller
+  ) {
+
+    ```
+if (!data) {
+  return;
+}
+
+
+// -------------------------------------------------------------------------
+// SERVER
+// -------------------------------------------------------------------------
+
+const serverOnline =
+  data.status === 'online';
+
+if (serverPowerToggle) {
+
+  serverPowerToggle.checked =
+    serverOnline;
+}
+
+
+if (serverOnline) {
+
+  updateServerVisualState(
+    'RUNNING'
+  );
+
+} else {
+
+  updateServerVisualState(
+    'OFF'
+  );
+}
+
+
+// -------------------------------------------------------------------------
+// BLUESTACKS
+// -------------------------------------------------------------------------
+
+const bsOnline =
+  !!data.bluestacks;
+
+
+if (bsInstanceToggle) {
+
+  bsInstanceToggle.checked =
+    bsOnline;
+}
+
+
+if (bsOnline) {
+
+  updateBlueStacksVisualState(
+    data.gameRunning ||
+    isActiveGamePhase(data.gamePhase)
+      ? 'PLAYING'
+      : 'RUNNING'
+  );
+
+} else {
+
+  updateBlueStacksVisualState(
+    'OFF'
+  );
+}
+
+
+// -------------------------------------------------------------------------
+// CV
+// -------------------------------------------------------------------------
+
+if (
+  controller &&
+  typeof controller.cv === 'boolean'
+) {
+
+  if (cvAutoSyncToggle) {
+
+    /*
+     * Only update the checkbox if the
+     * user isn't currently manipulating it.
+     */
+    if (!busy.cv) {
+
+      cvAutoSyncToggle.checked =
+        controller.cv;
     }
+
+    updateCvVisualState(
+      controller.cv
+    );
+  }
+}
+
+
+// -------------------------------------------------------------------------
+// PHASE
+// -------------------------------------------------------------------------
+
+updatePhase(
+  data.gamePhase
+);
+
+
+// -------------------------------------------------------------------------
+// DEVICE
+// -------------------------------------------------------------------------
+
+if (popPortLink) {
+
+  popPortLink.innerText =
+    data.device ||
+    '127.0.0.1:5555';
+}
+
+
+// -------------------------------------------------------------------------
+// BROWSER BUTTON
+// -------------------------------------------------------------------------
+
+updateBrowserStatus(
+  data
+);
+```
+
   }
 
-  function openPage(targetPath) {
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ action: 'OPEN_PAGE', page: targetPath });
-    } else {
-      window.open(targetPath, '_blank');
+  // ===========================================================================
+  // OFFLINE
+  // ===========================================================================
+
+  function applyOfflineState() {
+
+    ```
+if (serverPowerToggle) {
+
+  serverPowerToggle.checked =
+    false;
+}
+
+if (bsInstanceToggle) {
+
+  bsInstanceToggle.checked =
+    false;
+}
+
+
+updateServerVisualState(
+  'OFF'
+);
+
+updateBlueStacksVisualState(
+  'OFF'
+);
+
+
+if (btnOpenBrowser) {
+
+  btnOpenBrowser.className =
+    'btn-header-browser status-offline';
+}
+
+
+if (popGamePhase) {
+
+  popGamePhase.innerText =
+    'OFFLINE';
+}
+
+
+if (serverToggleDesc) {
+
+  serverToggleDesc.innerText =
+    'Server Offline (Switch ON to Start)';
+}
+
+
+if (bsToggleDesc) {
+
+  bsToggleDesc.innerText =
+    'Closed';
+}
+```
+
+  }
+
+  // ===========================================================================
+  // BLUE STACKS VISUAL STATE
+  // ===========================================================================
+
+  function updateBlueStacksVisualState(
+    state
+  ) {
+
+    ```
+if (!moduleBs) {
+  return;
+}
+
+
+switch (state) {
+
+  case 'STARTING':
+
+    moduleBs.classList.add(
+      'is-active'
+    );
+
+    if (bsToggleDesc) {
+
+      bsToggleDesc.innerText =
+        'Launching...';
     }
+
+    break;
+
+
+  case 'RUNNING':
+
+    moduleBs.classList.add(
+      'is-active'
+    );
+
+    if (bsToggleDesc) {
+
+      bsToggleDesc.innerText =
+        'Running';
+    }
+
+    break;
+
+
+  case 'PLAYING':
+
+    moduleBs.classList.add(
+      'is-active'
+    );
+
+    if (bsToggleDesc) {
+
+      bsToggleDesc.innerText =
+        'Playing';
+    }
+
+    break;
+
+
+  case 'STOPPING':
+
+    moduleBs.classList.remove(
+      'is-active'
+    );
+
+    if (bsToggleDesc) {
+
+      bsToggleDesc.innerText =
+        'Closing...';
+    }
+
+    break;
+
+
+  case 'ERROR':
+
+    moduleBs.classList.remove(
+      'is-active'
+    );
+
+    if (bsToggleDesc) {
+
+      bsToggleDesc.innerText =
+        'Error';
+    }
+
+    break;
+
+
+  case 'OFF':
+  default:
+
+    moduleBs.classList.remove(
+      'is-active'
+    );
+
+    if (bsToggleDesc) {
+
+      bsToggleDesc.innerText =
+        'Closed';
+    }
+
+    break;
+}
+```
+
   }
 
-  function pollStatus() {
-    if (isStoppingServer || isPolling) return;
-    isPolling = true;
+  // ===========================================================================
+  // SERVER VISUAL STATE
+  // ===========================================================================
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+  function updateServerVisualState(
+    state
+  ) {
 
-    fetch('http://127.0.0.1:5000/status', { signal: controller.signal })
-      .then((res) => res.json())
-      .then((data) => {
-        clearTimeout(timeoutId);
-        consecutiveFailures = 0;
-        if (isStoppingServer) return;
+    ```
+if (!moduleServer) {
+  return;
+}
 
-        // Border Indicator Logic:
-        // 1. Green Border: Full system is online (Server online + BlueStacks online + Game running / active phase)
-        // 2. Orange Border: Only BlueStacks is open (Server + BlueStacks online, game in standby)
-        // 3. Neutral/Subtle Border: Offline / Server Standby
-        if (btnOpenBrowser) {
-          if (data.status === 'online' && data.bluestacks && (data.gameRunning || (data.gamePhase && data.gamePhase !== 'N/A'))) {
-            btnOpenBrowser.className = 'btn-header-browser status-full-online';
-          } else if (data.status === 'online' && data.bluestacks) {
-            btnOpenBrowser.className = 'btn-header-browser status-bs-only';
-          } else {
-            btnOpenBrowser.className = 'btn-header-browser status-offline';
-          }
-        }
 
-        if (moduleServer) moduleServer.classList.add('is-active');
-        if (serverPowerToggle && !serverPowerToggle.checked) {
-          serverPowerToggle.checked = true;
-        }
-        if (popPortLink) {
-          popPortLink.innerText = data.device || '127.0.0.1:5555';
-        }
+switch (state) {
 
-        if (!isStoppingBs) {
-          if (moduleBs) {
-            if (data.bluestacks) moduleBs.classList.add('is-active');
-            else moduleBs.classList.remove('is-active');
-          }
-          if (bsInstanceToggle) {
-            bsInstanceToggle.checked = !!data.bluestacks;
-            if (bsToggleDesc) {
-              if (!data.bluestacks) {
-                bsToggleDesc.innerText = 'Closed';
-              } else if (data.gameRunning || (data.gamePhase && data.gamePhase !== 'N/A' && data.gamePhase !== 'Standby' && data.gamePhase !== 'STANDBY' && data.gamePhase !== 'OFFLINE')) {
-                bsToggleDesc.innerText = 'Playing';
-              } else {
-                bsToggleDesc.innerText = 'Running';
-              }
-            }
-          }
-        }
+  case 'STARTING':
 
-        if (popGamePhase) {
-          const nextPhase = (data.gamePhase || 'STANDBY').toUpperCase();
-          if (popGamePhase.innerText !== nextPhase) {
-            popGamePhase.innerText = nextPhase;
-            popGamePhase.classList.remove('phase-pulse');
-            void popGamePhase.offsetWidth;
-            popGamePhase.classList.add('phase-pulse');
-          }
-        }
-      })
-      .catch(() => {
-        clearTimeout(timeoutId);
-        consecutiveFailures++;
+    moduleServer.classList.add(
+      'is-active'
+    );
 
-        // Only transition to Offline if 3 consecutive polls fail (prevents flickering)
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES || isStoppingServer) {
-          if (btnOpenBrowser) {
-            btnOpenBrowser.className = 'btn-header-browser status-offline';
-          }
-          if (moduleServer) moduleServer.classList.remove('is-active');
-          if (moduleBs) moduleBs.classList.remove('is-active');
-          if (serverPowerToggle && !isStoppingServer) {
-            serverPowerToggle.checked = false;
-            if (serverToggleDesc) {
-              serverToggleDesc.innerHTML = 'Server Offline (Switch ON to Start)';
-            }
-          }
-          if (bsInstanceToggle) {
-            bsInstanceToggle.checked = false;
-            if (bsToggleDesc) {
-              bsToggleDesc.innerText = 'Closed';
-            }
-          }
-          if (popGamePhase) popGamePhase.innerText = 'OFFLINE';
-        }
-      })
-      .finally(() => {
-        isPolling = false;
-      });
+    if (serverToggleDesc) {
+
+      serverToggleDesc.innerText =
+        'Starting Server (Port 5000)...';
+    }
+
+    break;
+
+
+  case 'RUNNING':
+
+    moduleServer.classList.add(
+      'is-active'
+    );
+
+    if (serverToggleDesc) {
+
+      serverToggleDesc.innerHTML =
+        'Bridge: <a id="popPortLink" class="bridge-link" href="http://127.0.0.1:5000/status" target="_blank">127.0.0.1:5000</a>';
+    }
+
+    break;
+
+
+  case 'STOPPING':
+
+    moduleServer.classList.remove(
+      'is-active'
+    );
+
+    if (serverToggleDesc) {
+
+      serverToggleDesc.innerText =
+        'Stopping Server...';
+    }
+
+    break;
+
+
+  case 'ERROR':
+
+    moduleServer.classList.remove(
+      'is-active'
+    );
+
+    if (serverToggleDesc) {
+
+      serverToggleDesc.innerText =
+        'Server Error';
+    }
+
+    break;
+
+
+  case 'OFF':
+  default:
+
+    moduleServer.classList.remove(
+      'is-active'
+    );
+
+    if (serverToggleDesc) {
+
+      serverToggleDesc.innerText =
+        'Server Offline (Switch ON to Start)';
+    }
+
+    break;
+}
+```
+
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  // ===========================================================================
+  // CV VISUAL STATE
+  // ===========================================================================
+
+  function updateCvVisualState(
+    enabled
+  ) {
+
+    ```
+if (!moduleCv) {
+  return;
+}
+
+if (enabled) {
+
+  moduleCv.classList.add(
+    'is-active'
+  );
+
+} else {
+
+  moduleCv.classList.remove(
+    'is-active'
+  );
+}
+```
+
+  }
+
+  // ===========================================================================
+  // GAME PHASE
+  // ===========================================================================
+
+  function updatePhase(
+    phase
+  ) {
+
+    ```
+const nextPhase =
+  String(
+    phase || 'STANDBY'
+  ).toUpperCase();
+
+
+if (!popGamePhase) {
+  return;
+}
+
+
+if (
+  lastPhase !== null &&
+  lastPhase !== nextPhase
+) {
+
+  popGamePhase.classList.remove(
+    'phase-pulse'
+  );
+
+  void popGamePhase.offsetWidth;
+
+  popGamePhase.classList.add(
+    'phase-pulse'
+  );
+}
+
+
+popGamePhase.innerText =
+  nextPhase;
+
+lastPhase =
+  nextPhase;
+```
+
+  }
+
+  // ===========================================================================
+  // BROWSER STATUS
+  // ===========================================================================
+
+  function updateBrowserStatus(
+    data
+  ) {
+
+    ```
+if (!btnOpenBrowser) {
+  return;
+}
+
+
+const serverOnline =
+  data.status === 'online';
+
+const bsOnline =
+  !!data.bluestacks;
+
+const gameRunning =
+  !!data.gameRunning ||
+  isActiveGamePhase(
+    data.gamePhase
+  );
+
+
+if (
+  serverOnline &&
+  bsOnline &&
+  gameRunning
+) {
+
+  btnOpenBrowser.className =
+    'btn-header-browser status-full-online';
+
+} else if (
+  serverOnline &&
+  bsOnline
+) {
+
+  btnOpenBrowser.className =
+    'btn-header-browser status-bs-only';
+
+} else {
+
+  btnOpenBrowser.className =
+    'btn-header-browser status-offline';
+}
+```
+
+  }
+
+  // ===========================================================================
+  // HELPERS
+  // ===========================================================================
+
+  function isActiveGamePhase(
+    phase
+  ) {
+
+    ```
+if (!phase) {
+  return false;
+}
+
+const normalized =
+  String(phase)
+    .trim()
+    .toLowerCase();
+
+
+return ![
+  'n/a',
+  'standby',
+  'unknown',
+  'offline',
+  'off',
+  ''
+].includes(normalized);
+```
+
+  }
+
+  function setBusy(
+    module,
+    value
+  ) {
+
+    ```
+busy[module] =
+  value;
+```
+
+  }
+
+  function sendMessage(
+    message
+  ) {
+
+    ```
+return new Promise(
+  (resolve, reject) => {
+
+    if (
+      typeof chrome === 'undefined' ||
+      !chrome.runtime ||
+      !chrome.runtime.sendMessage
+    ) {
+
+      reject(
+        new Error(
+          'Chrome runtime messaging is unavailable.'
+        )
+      );
+
+      return;
+    }
+
+
+    chrome.runtime.sendMessage(
+      message,
+      (response) => {
+
+        if (
+          chrome.runtime.lastError
+        ) {
+
+          reject(
+            new Error(
+              chrome.runtime.lastError.message
+            )
+          );
+
+          return;
+        }
+
+
+        resolve(
+          response
+        );
+      }
+    );
+  }
+);
+```
+
+  }
+
 })();

@@ -6999,5 +6999,19 @@ window.MLBBData = {
         "avatar": "DB/round/items/direhit.png",
         "cornerAvatar": "DB/round/items/direhit.png"
     }
+],
+spells: [
+    { id: "flicker", name: "Flicker", category: "Mobility", cooldown: "120s", tag: "Flash / Dash", icon: "⚡", color: "#38bdf8", description: "Teleport a short distance in the target direction and gain 5 (+1*lvl) Physical & Magic Defense for 1s." },
+    { id: "retribution", name: "Retribution", category: "Jungle", cooldown: "35s", tag: "Jungling", icon: "🗡️", color: "#f59e0b", description: "Deals 520 (+80*lvl) True Damage to creeps or minions. Essential for Junglers to secure Lord & Turtle." },
+    { id: "purify", name: "Purify", category: "Defense", cooldown: "90s", tag: "Anti-CC", icon: "🛡️", color: "#34d399", description: "Immediately removes all CC and debuff effects, grants CC immunity, and boosts Movement Speed by 15% for 1.2s." },
+    { id: "inspire", name: "Inspire", category: "Combat", cooldown: "75s", tag: "Attack Speed", icon: "🏹", color: "#facc15", description: "Greatly increases Attack Speed up to 500% and ignores 8 (+1*lvl) Physical Defense for the next 8 basic attacks." },
+    { id: "vengeance", name: "Vengeance", category: "Defense", cooldown: "75s", tag: "Reflect / Tank", icon: "🌀", color: "#fb923c", description: "Reduces damage taken by 35% and reflects 35% of magic damage back to attackers for 3s." },
+    { id: "execute", name: "Execute", category: "Combat", cooldown: "90s", tag: "Finisher", icon: "⚔️", color: "#ef4444", description: "Deals 100 (+10*lvl) True Damage + 13% of target's lost HP. Cooldown is reduced by 40% upon getting a kill." },
+    { id: "aegis", name: "Aegis", category: "Defense", cooldown: "90s", tag: "Shield / Protect", icon: "🔰", color: "#60a5fa", description: "Instantly generates a 750 (+50*lvl) shield for self and bestows 70% of the shield to lowest-HP nearby ally for 3s." },
+    { id: "revitalize", name: "Revitalize", category: "Support", cooldown: "100s", tag: "Team Heal", icon: "🌿", color: "#10b981", description: "Summons a Healing Spring that restores 2.5% Max HP every 0.4s to allies within its radius for 4s." },
+    { id: "sprint", name: "Sprint", category: "Mobility", cooldown: "100s", tag: "Speed / Kiting", icon: "👟", color: "#38bdf8", description: "Gains 50% decaying Movement Speed, total immunity to Slow effects, and reduces all debuff durations by 50% for 6s." },
+    { id: "petrify", name: "Petrify", category: "Combat", cooldown: "90s", tag: "AoE Stun", icon: "🗿", color: "#a855f7", description: "Deals 100 (+15*lvl) Magic Damage to surrounding enemies and petrifies (stuns) them in place for 0.8s." },
+    { id: "flameshot", name: "Flameshot", category: "Combat", cooldown: "50s", tag: "Poke / Knockback", icon: "🔥", color: "#f97316", description: "Fires a blazing shot dealing 200–640 (+45%–140% Magic Power) Magic Damage. Knocks back nearby enemies on hit." },
+    { id: "arrival", name: "Arrival", category: "Mobility", cooldown: "75s", tag: "Map Teleport", icon: "🚪", color: "#c084fc", description: "Channels for 3s to teleport directly to an allied turret or minion. Grants 60% Movement Speed upon landing." }
 ]
 };
